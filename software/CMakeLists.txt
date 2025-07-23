@@ -10,7 +10,7 @@ project(arcanoid)
 pico_sdk_init()
 
 # Создаем исполняемый файл из main.c и называем его "arcanoid_drive"
-add_executable(arcanoid_drive pwm.c)
+add_executable(arcanoid_drive drive.c)
 
 # Подключаем стандартную библиотеку Pico
 target_link_libraries(arcanoid_drive pico_stdlib hardware_pwm)
