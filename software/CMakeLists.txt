@@ -4,15 +4,21 @@ cmake_minimum_required(VERSION 3.12)
 include($ENV{PICO_SDK_PATH}/external/pico_sdk_import.cmake)
 
 # Название проекта (не влияет на имя выходного файла)
-project(arcanoid)
+project(wasserschwein)
 
 # Инициализация SDK
 pico_sdk_init()
 
 # Создаем исполняемый файл из main.c и называем его "arcanoid_drive"
-add_executable(arcanoid_drive drive.c)
+add_executable(arcanoid_main_file src/uart.c)
+
+pico_enable_stdio_uart(arcanoid_main_file 1)
+pico_enable_stdio_usb(arcanoid_main_file 0)
+
+# Генерируем .uf2, .hex, .bin
+pico_add_extra_outputs(arcanoid_main_file)
 
 # Подключаем стандартную библиотеку Pico
-target_link_libraries(arcanoid_drive pico_stdlib hardware_pwm)
-# Генерируем .uf2, .hex, .bin
-pico_add_extra_outputs(arcanoid_drive)
+target_link_libraries(arcanoid_main_file pico_stdlib hardware_uart)
+
+pico_add_extra_outputs(arcanoid_main_file)
