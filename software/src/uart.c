@@ -1,4 +1,5 @@
 #include <stdio.h>
+#include <string.h>
 #include "pico/stdlib.h"
 #include "hardware/uart.h"
 
@@ -6,6 +7,43 @@
 #define BAUD_RATE 9600
 #define UART_TX_PIN 0
 #define UART_RX_PIN 1
+
+
+void on_off_LED(const int NUM_LED, const int del, const int status){
+    
+    int state = status;
+    int LED = NUM_LED;
+    int delay = del;
+    gpio_set_dir(LED, 1);
+    
+    if(state == 1){
+        gpio_put(LED, 1);
+    }
+    else if(state == 0){
+        gpio_put(LED, 0);
+    }
+    else if(state == 2){
+        gpio_put(LED, 1);
+        sleep_ms(del);
+        gpio_put(LED, 0);
+        sleep_ms(del);
+    }
+   
+
+}
+
+void read_bluetooth(char c){
+    
+    if(c == 'O'){
+        on_off_LED(2, 500, 1);
+        char A = 'activate';
+        uart_putc(UART_ID, A);
+    }else if(c == 'o'){
+        char D= 'deactivate';
+        uart_putc(UART_ID, D);  
+        on_off_LED(2,500, 0);
+    }
+}
 
 int main() {
     stdio_init_all();
@@ -19,14 +57,14 @@ int main() {
     
     while (true) {
         // Чтение данных из Bluetooth
-        if (uart_is_readable(UART_ID)) {
-            char c = uart_getc(UART_ID);
-            putchar(c); // Вывод в консоль
+        // if (uart_is_readable(UART_ID)) {
+        //     char c = uart_getc(UART_ID);
+        //     read_bluetooth(c);
             
-            // Эхо обратно в Bluetooth
-            uart_putc(UART_ID, c);
-        }
+        // }
         
+        on_off_LED(2, 500, 1);
+
         sleep_ms(10);
     }
 }
