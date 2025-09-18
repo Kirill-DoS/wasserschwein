@@ -20,30 +20,14 @@
 #define WRAP 99
 #define DIVIDER 125.0f
 
-void fi(uint *pwm)
+void fi(int *pwm)
 {
-    gpio_set_function(FI, GPIO_FUNC_PWM);
-    uint slice_num = pwm_gpio_to_slice_num(FI);
-    uint chan = pwm_gpio_to_channel(FI);
-
-    pwm_set_clkdiv(slice_num, DIVIDER);
-    pwm_set_wrap(slice_num, WRAP);
-    pwm_set_chan_level(slice_num, chan, pwm);
-
-    pwm_set_enabled(slice_num, 1);
+    
 }
 
-void bi(uint *pwm)
+void bi(int *pwm)
 {
-    gpio_set_function(BI, GPIO_FUNC_PWM);
-    uint slice_num = pwm_gpio_to_slice_num(BI);
-    uint chan = pwm_gpio_to_channel(BI);
-
-    pwm_config_set_clkdiv(slice_num, DIVIDER);
-    pwm_set_wrap(slice_num, WRAP);
-    pwm_set_chan_level(slice_num, chan, pwm);
-
-    pwm_set_enabled(slice_num, 1);
+    
 }
 
 
@@ -51,12 +35,45 @@ void bi(uint *pwm)
 //servo init
 #define SERVO1 12
 #define SERVO2 13
+#define SERVO_WRAP 19999
+#define SERVO_DIVIDER 125.0f
 
-void push()
+void servo_1_init(int *millisec)
 {
+    gpio_set_function(SERVO1, GPIO_FUNC_PWM);
+    uint slice_num = pwm_gpio_to_slice_num(SERVO1);
+    uint chan = pwm_gpio_to_channel(SERVO1);
+
+    pwm_config config = pwm_get_default_config();
+    pwm_config_set_clkdiv(&config, SERVO_DIVIDER);
+    pwm_config_set_wrap(&config, SERVO_WRAP);
+
+    pwm_init(slice_num, &config, true);
 
 }
 
+void servo_2_init(int *millisec)
+{
+    gpio_set_function(SERVO2, GPIO_FUNC_PWM);
+    uint slice_num = pwm_gpio_to_slice_num(SERVO2);
+    uint chan = pwm_gpio_to_channel(SERVO2);
+
+    pwm_config config = pwm_get_default_config();
+    pwm_config_set_clkdiv(&config, SERVO_DIVIDER);
+    pwm_config_set_wrap(&config, SERVO_WRAP);
+
+    pwm_init(slice_num, &config, true);
+}
+
+void esc_set_speed(int *percent)
+{
+    if(percent > 100 )
+        percent = 100;
+    else 
+        if(percent <= 0)
+            percent = 1;
+    else percent = percent;
+}
 
 //------------comutation-----------------
 //init

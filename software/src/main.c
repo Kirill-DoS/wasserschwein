@@ -21,17 +21,20 @@ int main(){
     gpio_set_function(UART_RX_PIN, GPIO_FUNC_UART);
 
     while(true){
-        if(uart_is_readable(UART_ID)){
-            char c = uart_getc(UART_ID);
+        // if(uart_is_readable(UART_ID)){
+        //     char c = uart_getc(UART_ID);
             
-            if(c == '1'){
-                gpio_put(LED, 1);
-            }else 
-            if(c == '0'){
-                gpio_put(LED, 0);
-            }
+        //     if(c == '1'){
+        //         gpio_put(LED, 1);
+        //     }else 
+        //     if(c == '0'){
+        //         gpio_put(LED, 0);
+        //     }
 
-            sleep_ms(10);
-        }
+        //     sleep_ms(10);
+        // }
+
+        printf("Hello from rp");
+        sleep_ms(500);
     }
 }

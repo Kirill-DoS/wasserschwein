@@ -5,6 +5,7 @@
         "cdefs.h": "c",
         "pwm.h": "c",
         "stdlib.h": "c",
-        "cstdint": "cpp"
+        "cstdint": "cpp",
+        "binary_info.h": "c"
     }
 }
