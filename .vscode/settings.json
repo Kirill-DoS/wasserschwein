@@ -1,6 +1,10 @@
 {
     "files.associations": {
         "uart.h": "c",
-        "stdio.h": "c"
+        "stdio.h": "c",
+        "cdefs.h": "c",
+        "pwm.h": "c",
+        "stdlib.h": "c",
+        "cstdint": "cpp"
     }
 }
