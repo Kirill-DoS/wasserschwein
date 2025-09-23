@@ -38,11 +38,11 @@ void bi(int *pwm)
 #define SERVO_WRAP 19999
 #define SERVO_DIVIDER 125.0f
 
-void servo_1_init(int *millisec)
+void servo_1_init()
 {
     gpio_set_function(SERVO1, GPIO_FUNC_PWM);
-    uint slice_num = pwm_gpio_to_slice_num(SERVO1);
-    uint chan = pwm_gpio_to_channel(SERVO1);
+    int slice_num = pwm_gpio_to_slice_num(SERVO1);
+    int chan = pwm_gpio_to_channel(SERVO1);
 
     pwm_config config = pwm_get_default_config();
     pwm_config_set_clkdiv(&config, SERVO_DIVIDER);
@@ -52,11 +52,11 @@ void servo_1_init(int *millisec)
 
 }
 
-void servo_2_init(int *millisec)
+void servo_2_init()
 {
     gpio_set_function(SERVO2, GPIO_FUNC_PWM);
-    uint slice_num = pwm_gpio_to_slice_num(SERVO2);
-    uint chan = pwm_gpio_to_channel(SERVO2);
+    int slice_num = pwm_gpio_to_slice_num(SERVO2);
+    int chan = pwm_gpio_to_channel(SERVO2);
 
     pwm_config config = pwm_get_default_config();
     pwm_config_set_clkdiv(&config, SERVO_DIVIDER);
@@ -65,14 +65,13 @@ void servo_2_init(int *millisec)
     pwm_init(slice_num, &config, true);
 }
 
-void esc_set_speed(int *percent)
+void esc_set_speed(int *percent, int num)
 {
-    if(percent > 100 )
-        percent = 100;
-    else 
-        if(percent <= 0)
-            percent = 1;
-    else percent = percent;
+    int speed = constrain(percent, 100, 0);
+
+    int pulse_us = 1000 + (speed * 10);
+    int level = (pulse_us * WRAP) / 20000;
+    pwm_set_gpio_level(num, level);
 }
 
 //------------comutation-----------------
@@ -90,3 +89,17 @@ void button_clicked(int *GPIO)
 {
 
 }
+
+int constrain(int value, int high_level, int low_level)
+{
+    if(value > high_level){
+        return high_level;
+    }else if(value < low_level){
+        return low_level;
+    }else{
+        return value;
+    }
+}
+
+led_on(int *GPIO)
+{}

@@ -1,40 +1,45 @@
 #include <stdio.h>
+
 #include "pico/stdlib.h"
 #include "hardware/uart.h"
-//#include "hardware/pwm.h"
+#include "arcanoid.h"
 
 #define UART_ID uart0
-#define BAUD_RATE 9600
-#define UART_TX_PIN 0
-#define UART_RX_PIN 1
-#define LED 2
+#define BAUDRATE 9600
+#define TX 0
+#define RX 1
 
+#define SERVO1 12
+#define SERVO2 13
 
 int main(){
+
     stdio_init_all();
-    gpio_init(LED);
-    uart_init(UART_ID, BAUD_RATE);
+    gpio_set_function(TX, GPIO_FUNC_UART);
+    gpio_set_function(RX, GPIO_FUNC_UART);
 
-    gpio_set_dir(LED, GPIO_OUT);
+    uart_init(UART_ID, BAUDRATE);
+    servo_1_init();
+    servo_2_init();
 
-    gpio_set_function(UART_TX_PIN, GPIO_FUNC_UART);
-    gpio_set_function(UART_RX_PIN, GPIO_FUNC_UART);
 
-    while(true){
-        // if(uart_is_readable(UART_ID)){
-        //     char c = uart_getc(UART_ID);
-            
-        //     if(c == '1'){
-        //         gpio_put(LED, 1);
-        //     }else 
-        //     if(c == '0'){
-        //         gpio_put(LED, 0);
-        //     }
+    while(1){
+        if(uart_is_readable(UART_ID)){
+            char c = uart_getc(UART_ID);
+            uart_putc(UART_ID, c);
 
-        //     sleep_ms(10);
-        // }
-
-        printf("Hello from rp");
-        sleep_ms(500);
+            if(c == '1'){
+                esc_set_speed(100, SERVO1);
+            }else if(c == '0'){
+                esc_set_speed(0, SERVO1);
+            // }else{
+            //     uart_putc(UART_ID, 'E');
+            //     uart_putc(UART_ID, c);
+            // }
+            sleep_ms(10);
+        }
+        
     }
+}
+return 0;
 }

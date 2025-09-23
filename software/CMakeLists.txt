@@ -10,15 +10,15 @@ project(wasserschwein)
 pico_sdk_init()
 
 # Создаем исполняемый файл из main.c и называем его "arcanoid__main_file"
-add_executable(arcanoid_main_file src/main.c)
+add_executable(arcanoid_main_file src/main.c src/arcanoid.c)
 
-pico_enable_stdio_uart(arcanoid_main_file 0)
-pico_enable_stdio_usb(arcanoid_main_file 1)
+pico_enable_stdio_uart(arcanoid_main_file 1)
+pico_enable_stdio_usb(arcanoid_main_file 0)
 
 # Генерируем .uf2, .hex, .bin
 pico_add_extra_outputs(arcanoid_main_file)
 
 # Подключаем стандартную библиотеку Pico
-target_link_libraries(arcanoid_main_file pico_stdlib hardware_uart)
+target_link_libraries(arcanoid_main_file pico_stdlib hardware_uart hardware_pwm)
 
 pico_add_extra_outputs(arcanoid_main_file)
