@@ -24,22 +24,14 @@ int main(){
 
 
     while(1){
-        if(uart_is_readable(UART_ID)){
-            char c = uart_getc(UART_ID);
-            uart_putc(UART_ID, c);
-
-            if(c == '1'){
-                esc_set_speed(100, SERVO1);
-            }else if(c == '0'){
-                esc_set_speed(0, SERVO1);
-            // }else{
-            //     uart_putc(UART_ID, 'E');
-            //     uart_putc(UART_ID, c);
-            // }
-            sleep_ms(10);
-        }
-        
+        esc_set_speed(2000, SERVO1);
+        sleep_ms(2000);
+        esc_set_speed(1500, SERVO1);
+        sleep_ms(1000);
+        esc_set_speed(1000, SERVO1);
+        sleep_ms(2000);
+        esc_set_speed(1500, SERVO1);
+        sleep_ms(500);       
     }
-}
 return 0;
 }

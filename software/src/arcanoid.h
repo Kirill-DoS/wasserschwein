@@ -7,7 +7,7 @@ void bi(int *pwm);
 //servo
 void servo_1_init();
 void servo_2_init();
-void esc_set_speed(int *percent, int num);
+void esc_set_speed(int pulse_us, int num);
 
 //comutation
 float battery_charge(int *GPIO);

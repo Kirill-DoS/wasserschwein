@@ -45,11 +45,11 @@ void servo_1_init()
     int chan = pwm_gpio_to_channel(SERVO1);
 
     pwm_config config = pwm_get_default_config();
-    pwm_config_set_clkdiv(&config, SERVO_DIVIDER);
-    pwm_config_set_wrap(&config, SERVO_WRAP);
+    pwm_config_set_clkdiv(slice_num, SERVO_DIVIDER);
+    pwm_config_set_wrap(chan, SERVO_WRAP);
 
-    pwm_init(slice_num, &config, true);
-
+    pwm_set_enabled(slice_num, 1);
+    
 }
 
 void servo_2_init()
@@ -59,19 +59,22 @@ void servo_2_init()
     int chan = pwm_gpio_to_channel(SERVO2);
 
     pwm_config config = pwm_get_default_config();
-    pwm_config_set_clkdiv(&config, SERVO_DIVIDER);
-    pwm_config_set_wrap(&config, SERVO_WRAP);
+    pwm_config_set_clkdiv(slice_num, SERVO_DIVIDER);
+    pwm_config_set_wrap(slice_num, SERVO_WRAP);
 
-    pwm_init(slice_num, &config, true);
+    pwm_set_enabled(slice_num, 1);
+
 }
 
-void esc_set_speed(int *percent, int num)
+void esc_set_speed(int pulse_us, int num)
 {
-    int speed = constrain(percent, 100, 0);
+    pulse_us = constrain(pulse_us, 1000, 2000);
 
-    int pulse_us = 1000 + (speed * 10);
+    int slice_num = pwm_gpio_to_slice_num(num);
+    int chan = pwm_gpio_to_channel(num);
     int level = (pulse_us * WRAP) / 20000;
-    pwm_set_gpio_level(num, level);
+
+    pwm_set_chan_level(slice_num, chan, level);
 }
 
 //------------comutation-----------------
@@ -100,6 +103,6 @@ int constrain(int value, int high_level, int low_level)
         return value;
     }
 }
-
-led_on(int *GPIO)
-{}
+void led_on(int *GPIO)
+{
+}
