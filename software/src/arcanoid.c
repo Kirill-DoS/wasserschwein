@@ -14,20 +14,30 @@
 
 //-------------colector motor-----------
 //pwm init
-#define FI 11
-#define BI 10
 #define SYS_FREQ 125000000
-#define WRAP 99
-#define DIVIDER 125.0f
+#define WRAP 255
+#define DIVIDER SYS_FREQ / (WRAP + 1)
 
-void fi(int *pwm)
-{
-    
+void motor_init(uint GPIO){
+    gpio_set_function(GPIO, GPIO_FUNC_PWM);
+    uint slice_num = pwm_gpio_to_slice_num(GPIO);
+
+    pwm_set_clkdiv(slice_num, DIVIDER);
+    pwm_set_wrap(slice_num, WRAP);
+    pwm_set_enabled(slice_num, true);
 }
 
-void bi(int *pwm)
-{
-    
+void drive(uint left, uint right, uint GPIO1, uint GPIO2){
+    uint slice_num1 = pwm_gpio_to_slice_num(GPIO1);
+    uint slice_num2 = pwm_gpio_to_slice_num(GPIO2);
+    uint chan1 = pwm_gpio_to_channel(GPIO1);
+    uint chan2 = pwm_gpio_to_channel(GPIO2);
+
+    left = constrain(left, 0, WRAP);
+    right = constrain(right, 0, WRAP);
+
+    pwm_set_chan_level(slice_num1, chan1, left);
+    pwm_set_chan_level(slice_num2, chan2, right);
 }
 
 
@@ -38,41 +48,21 @@ void bi(int *pwm)
 #define SERVO_WRAP 19999
 #define SERVO_DIVIDER 125.0f
 
-void servo_1_init()
-{
-    gpio_set_function(SERVO1, GPIO_FUNC_PWM);
-    int slice_num = pwm_gpio_to_slice_num(SERVO1);
-    int chan = pwm_gpio_to_channel(SERVO1);
-
-    pwm_config config = pwm_get_default_config();
-    pwm_config_set_clkdiv(slice_num, SERVO_DIVIDER);
-    pwm_config_set_wrap(chan, SERVO_WRAP);
-
-    pwm_set_enabled(slice_num, 1);
+void servo_init(uint GPIO){
+    uint slice_num = pwm_gpio_to_slice_num(GPIO);
     
+    pwm_set_clkdiv(slice_num, SERVO_DIVIDER);
+    pwm_set_wrap(slice_num, SERVO_WRAP);
+    pwm_set_enabled(slice_num, true);
 }
 
-void servo_2_init()
-{
-    gpio_set_function(SERVO2, GPIO_FUNC_PWM);
-    int slice_num = pwm_gpio_to_slice_num(SERVO2);
-    int chan = pwm_gpio_to_channel(SERVO2);
-
-    pwm_config config = pwm_get_default_config();
-    pwm_config_set_clkdiv(slice_num, SERVO_DIVIDER);
-    pwm_config_set_wrap(slice_num, SERVO_WRAP);
-
-    pwm_set_enabled(slice_num, 1);
-
-}
-
-void esc_set_speed(int pulse_us, int num)
+void esc_set_speed(uint pulse_us, uint num)
 {
     pulse_us = constrain(pulse_us, 1000, 2000);
 
-    int slice_num = pwm_gpio_to_slice_num(num);
-    int chan = pwm_gpio_to_channel(num);
-    int level = (pulse_us * WRAP) / 20000;
+    uint slice_num = pwm_gpio_to_slice_num(num);
+    uint chan = pwm_gpio_to_channel(num);
+    uint level = (pulse_us * (SERVO_WRAP + 1)) / 20000;
 
     pwm_set_chan_level(slice_num, chan, level);
 }
@@ -81,14 +71,14 @@ void esc_set_speed(int pulse_us, int num)
 //init
 #define BUTTON_PIN 5
 #define LED_PIN 2
-#define BATERY 26
+#define BATTERY 26
 
-float battery_charge(int *GPIO)
+float battery_charge(uint GPIO)
 {
     
 }
 
-void button_clicked(int *GPIO)
+void button_clicked(uint GPIO)
 {
 
 }
@@ -103,6 +93,15 @@ int constrain(int value, int high_level, int low_level)
         return value;
     }
 }
-void led_on(int *GPIO)
+void led_on(uint GPIO, bool state)
 {
+    gpio_init(GPIO);
+    if(state == 1){
+        gpio_set_dir(GPIO, true);
+        gpio_put(GPIO, 1);
+    }else{
+        gpio_set_dir(GPIO, true);
+        gpio_put(GPIO, 1);
+    }
+
 }
