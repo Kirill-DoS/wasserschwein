@@ -15,23 +15,42 @@
 #define L 10
 #define R 11
 
+void init(){
+
+    gpio_set_function(L, GPIO_FUNC_PWM);
+    gpio_set_function(R, GPIO_FUNC_PWM);
+    gpio_set_function(SERVO1, GPIO_FUNC_PWM);
+    gpio_set_function(SERVO2, GPIO_FUNC_PWM);
+    //gpio_set_function(TX, GPIO_FUNC_UART);
+    //gpio_set_function(RX, GPIO_FUNC_UART);
+    gpio_init(LED);
+
+}
+
 int main(){
+    int ms = 1500;
+    int ms2 = 1600;
+    int ms1 = 1300;
 
     stdio_init_all();    
+    init();
+    sleep_ms(200);
+    gpio_set_dir(LED, 1);
+    gpio_put(LED, 1);
 
-    uint slice_num = pwm_gpio_to_slice_num(LED);
-    uint chan = pwm_gpio_to_channel(LED);
-
-    pwm_set_clkdiv(slice_num, 125.0f);
-    pwm_set_wrap(slice_num, 19999);
-    pwm_set_enabled(slice_num, true);
-    pwm_set_chan_level(slice_num, chan, 128);
-
-    while(true){ 
-        // led_on(LED, 1);
-        // sleep_ms(500);
-        // led_on(LED, 0);
-        // sleep_ms(500);
+    servo_init(SERVO1);
+    servo_init(SERVO2);
+    motor_init(L);
+    motor_init(R);
+    sleep_ms(200);
+    
+    while(true){   
+        esc_set_speed(ms, SERVO1);
+        sleep_ms(2000);
+        esc_set_speed(ms1, SERVO1);
+        sleep_ms(2000);
+        // esc_set_speed(ms2, SERVO1);
+        // sleep_ms(2000);
     }
     
 return 0;

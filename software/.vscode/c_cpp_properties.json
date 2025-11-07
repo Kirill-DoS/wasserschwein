@@ -1,0 +1,19 @@
+{
+    "configurations": [
+        {
+            "name": "Linux",
+            "includePath": [
+                "${workspaceFolder}/**",
+                "~/.pico-sdk/sdk/2.1.1/**",
+                "~/.pico-sdk/sdk/**",
+                "/home/ubuntu/.pico-sdk/sdk/2.1.1/src/rp2_common/hardware_pwm/include"
+            ],
+            "defines": [],
+            "compilerPath": "/usr/bin/arm-none-eabi-gcc",
+            "cStandard": "c17",
+            "cppStandard": "c++17",
+            "intelliSenseMode": "linux-clang-x64"
+        }
+    ],
+    "version": 4
+}
