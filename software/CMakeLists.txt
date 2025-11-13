@@ -19,6 +19,6 @@ pico_enable_stdio_usb(arcanoid_main_file 1)
 pico_add_extra_outputs(arcanoid_main_file)
 
 # Подключаем стандартную библиотеку Pico
-target_link_libraries(arcanoid_main_file pico_stdlib hardware_uart hardware_pwm)
+target_link_libraries(arcanoid_main_file pico_stdlib hardware_uart hardware_pwm hardware_clocks)
 
 pico_add_extra_outputs(arcanoid_main_file)

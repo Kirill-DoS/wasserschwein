@@ -6,6 +6,7 @@
         "pwm.h": "c",
         "stdlib.h": "c",
         "cstdint": "cpp",
-        "binary_info.h": "c"
+        "binary_info.h": "c",
+        "clocks.h": "c"
     }
 }

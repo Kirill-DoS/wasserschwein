@@ -1,4 +1,5 @@
 #include "arcanoid.h"
+#include "constants.h"
 
 #include "pico/stdlib.h"
 #include "hardware/uart.h"
@@ -6,12 +7,7 @@
 #include "hardware/clocks.h"
 
 
-//-------------colector motor-----------
-//pwm init
-#define SYS_FREQ clock_get_hz(clk_sys)
-#define MOTOR_WRAP 255
-#define MOTOR_FREQ 10000  // 10 kHz
-#define MOTOR_DIVIDER (SYS_FREQ / (MOTOR_FREQ * (MOTOR_WRAP + 1)))  // = 48.0
+//-------------DC motor-----------
 
 void motor_init(uint GPIO){
     gpio_set_function(GPIO, GPIO_FUNC_PWM);
@@ -36,10 +32,7 @@ void drive(uint left, uint right, uint GPIO1, uint GPIO2){
     pwm_set_chan_level(slice_num2, chan2, right);
 }
 
-//----------------uncolector motor---------
-//servo init
-#define SERVO_WRAP 19999
-#define SERVO_DIVIDER 125.0f
+//----------------BLCD motor---------
 
 void servo_init(uint GPIO){
     uint slice_num = pwm_gpio_to_slice_num(GPIO);
@@ -51,7 +44,7 @@ void servo_init(uint GPIO){
 
 void esc_set_speed(uint pulse_us, uint num)
 {
-    //pulse_us = constrain(pulse_us, 1000, 2000);
+    pulse_us = constrain(pulse_us, 1000, 2000);
 
     uint slice_num = pwm_gpio_to_slice_num(num);
     uint chan = pwm_gpio_to_channel(num);
