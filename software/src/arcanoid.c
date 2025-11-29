@@ -65,7 +65,7 @@ void write_ms(uint degree, uint num){
 #define BUTTON_PIN 5
 #define BATTERY_PIN 26
 
-float battery_charge(uint GPIO) {}
+float battery_charge(uint GPIO) {return 1.0;}
 
 void button_clicked(uint GPIO){}
 
