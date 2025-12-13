@@ -15,21 +15,14 @@ int main(void){
     sleep_ms(1000);
 
     printf("RP2040 running!\n");
+    gpio_put(LED, 1);
 
     esc_set_speed(2000, SERVO1);
     esc_set_speed(1000, SERVO2);
-    drive(128,128,L,R);
+    drive(128,255, L, R);
+
     while(true){
-        // if(uart_is_readable(UART_ID)){
-        //     char c = uart_getc(UART_ID);
-        //     if(c == '1'){
-        //         uart_putc(UART_ID, c);
-        //         drive(128,255, L,R);
-        //     }else if(c == '0'){
-        //         uart_putc(UART_ID, c);
-        //         drive(128,255, L, R);
-        //     }
-        // }
+        
     }
     
 return 0;

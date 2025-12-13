@@ -25,8 +25,8 @@ void drive(uint left, uint right, uint GPIO1, uint GPIO2){
     uint chan2 = pwm_gpio_to_channel(GPIO2);
 
     // Просто ограничиваем 0-255
-    left = constrain(left, 0, 255);
-    right = constrain(right, 0, 255);
+    left = constrain(left, 255, 0);
+    right = constrain(right, 255, 0);
 
     pwm_set_chan_level(slice_num1, chan1, left);
     pwm_set_chan_level(slice_num2, chan2, right);

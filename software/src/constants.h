@@ -5,7 +5,7 @@
 //motor constants
 #define SYS_FREQ clock_get_hz(clk_sys)
 #define MOTOR_WRAP 255
-#define MOTOR_FREQ 10000  // 10 kHz
+#define MOTOR_FREQ 5000  // 5 kHz
 #define MOTOR_DIVIDER (SYS_FREQ / (MOTOR_FREQ * (MOTOR_WRAP + 1)))  // = 48.0
 
 //servo init
