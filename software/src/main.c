@@ -1,45 +1,68 @@
 #include <stdio.h>
-
 #include "pico/stdlib.h"
 #include "hardware/uart.h"
+#include "hardware/pwm.h"
+#include "hardware/clocks.h"
+
 #include "arcanoid.h"
+#include "constants.h"
 
-#define UART_ID uart0
-#define BAUDRATE 9600
-#define TX 0
-#define RX 1
+void config(void);
 
-#define SERVO1 12
-#define SERVO2 13
+int main(void){
+    stdio_init_all();    
+    config();
+    sleep_ms(1000);
 
-int main(){
+    printf("RP2040 running!\n");
 
-    stdio_init_all();
+    esc_set_speed(2000, SERVO1);
+    esc_set_speed(1000, SERVO2);
+    drive(128,128,L,R);
+    while(true){
+        // if(uart_is_readable(UART_ID)){
+        //     char c = uart_getc(UART_ID);
+        //     if(c == '1'){
+        //         uart_putc(UART_ID, c);
+        //         drive(128,255, L,R);
+        //     }else if(c == '0'){
+        //         uart_putc(UART_ID, c);
+        //         drive(128,255, L, R);
+        //     }
+        // }
+    }
+    
+return 0;
+};
+
+void config(void){
+    gpio_set_function(L, GPIO_FUNC_PWM);
+    gpio_set_function(R, GPIO_FUNC_PWM);
+    gpio_set_function(SERVO1, GPIO_FUNC_PWM);
+    gpio_set_function(SERVO2, GPIO_FUNC_PWM);
     gpio_set_function(TX, GPIO_FUNC_UART);
     gpio_set_function(RX, GPIO_FUNC_UART);
-
     uart_init(UART_ID, BAUDRATE);
-    servo_1_init();
-    servo_2_init();
+    gpio_init(LED);
+    gpio_set_dir(LED, 1);
 
+    uint motor1_slice = pwm_gpio_to_slice_num(L);
+    pwm_set_clkdiv(motor1_slice, MOTOR_DIVIDER);
+    pwm_set_wrap(motor1_slice, MOTOR_WRAP);
+    pwm_set_enabled(motor1_slice, true);
 
-    while(1){
-        if(uart_is_readable(UART_ID)){
-            char c = uart_getc(UART_ID);
-            uart_putc(UART_ID, c);
+    uint motor2_slice = pwm_gpio_to_slice_num(R);
+    pwm_set_clkdiv(motor2_slice, MOTOR_DIVIDER);
+    pwm_set_wrap(motor2_slice, MOTOR_WRAP);
+    pwm_set_enabled(motor2_slice, true);
 
-            if(c == '1'){
-                esc_set_speed(100, SERVO1);
-            }else if(c == '0'){
-                esc_set_speed(0, SERVO1);
-            // }else{
-            //     uart_putc(UART_ID, 'E');
-            //     uart_putc(UART_ID, c);
-            // }
-            sleep_ms(10);
-        }
-        
-    }
-}
-return 0;
+    uint servo1_slice = pwm_gpio_to_slice_num(SERVO1);
+    pwm_set_clkdiv(servo1_slice, SERVO_DIVIDER);
+    pwm_set_wrap(servo1_slice, SERVO_WRAP);
+    pwm_set_enabled(servo1_slice, true);
+
+    uint servo2_slice = pwm_gpio_to_slice_num(SERVO2);
+    pwm_set_clkdiv(servo2_slice, SERVO_DIVIDER);
+    pwm_set_wrap(servo2_slice, SERVO_WRAP);
+    pwm_set_enabled(servo2_slice, true);
 }
