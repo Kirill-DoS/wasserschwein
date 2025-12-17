@@ -4,7 +4,7 @@
 #include "pico/stdlib.h"
 //motor 
 void motor_init(uint GPIO);
-void drive(uint left, uint rigth, uint GPIO1, uint GPIO2);
+void drive(uint pwm);
 
 //servo
 void servo_init(uint GPIO);

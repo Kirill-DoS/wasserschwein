@@ -15,7 +15,7 @@ clean:
 	rm -rf $(BUILD_DIR)
 
 deploy:
-	cp $(BUILD_DIR)/$(PROJECT_NAME).uf2 /media/ubuntu/RPI-RP21
+	cp $(BUILD_DIR)/$(PROJECT_NAME).uf2 /run/media/arch/RPI-RP2/
 
 help:
 	@echo "Доступные цели:"

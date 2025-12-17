@@ -18,18 +18,25 @@ void motor_init(uint GPIO){
     pwm_set_enabled(slice_num, true);
 }
 
-void drive(uint left, uint right, uint GPIO1, uint GPIO2){
-    uint slice_num1 = pwm_gpio_to_slice_num(GPIO1);
-    uint slice_num2 = pwm_gpio_to_slice_num(GPIO2);
-    uint chan1 = pwm_gpio_to_channel(GPIO1);
-    uint chan2 = pwm_gpio_to_channel(GPIO2);
+void drive(uint pwm){
+    int level = 0;
+    uint slice_num1 = pwm_gpio_to_slice_num(L);
+    uint slice_num2 = pwm_gpio_to_slice_num(R);
+    uint chan1 = pwm_gpio_to_channel(L);
+    uint chan2 = pwm_gpio_to_channel(R);
 
-    // Просто ограничиваем 0-255
-    left = constrain(left, 255, 0);
-    right = constrain(right, 255, 0);
-
-    pwm_set_chan_level(slice_num1, chan1, left);
-    pwm_set_chan_level(slice_num2, chan2, right);
+    if(pwm > 0){
+        level = constrain(pwm, 0, -255);
+        pwm_set_chan_level(slice_num1, chan1, level);
+        pwm_set_chan_level(slice_num2, chan2, 0);
+    }else if(pwm < 0){
+        level = constrain(pwm, 255, 0);
+        pwm_set_chan_level(slice_num1, chan1, level);
+        pwm_set_chan_level(slice_num2, chan2, 255);
+    }else if(pwm == 0){
+        level = 0;
+        pwm_set_chan_level(slice_num1, chan1, level);
+    }
 }
 
 //----------------BLCD motor---------

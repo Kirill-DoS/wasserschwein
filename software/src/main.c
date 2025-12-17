@@ -6,22 +6,25 @@
 
 #include "arcanoid.h"
 #include "constants.h"
+#include "uart.h"
 
 void config(void);
 
 int main(void){
     stdio_init_all();    
-    config();
+    config(); 
     sleep_ms(1000);
 
     printf("RP2040 running!\n");
     gpio_put(LED, 1);
 
-    esc_set_speed(2000, SERVO1);
-    esc_set_speed(1000, SERVO2);
-    drive(128,255, L, R);
-
     while(true){
+        get_uart_buf();
+        if(is_cmd_ready){
+            print_uart_buf();
+            is_cmd_ready = 0;
+            clear_buf();
+        }
         
     }
     
