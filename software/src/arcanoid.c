@@ -6,36 +6,28 @@
 #include "hardware/pwm.h"
 #include "hardware/clocks.h"
 
-
 //-------------DC motor-----------
 
-void motor_init(uint GPIO){
-    gpio_set_function(GPIO, GPIO_FUNC_PWM);
-    uint slice_num = pwm_gpio_to_slice_num(GPIO);
 
-    pwm_set_clkdiv(slice_num, MOTOR_DIVIDER);
-    pwm_set_wrap(slice_num, MOTOR_WRAP);
-    pwm_set_enabled(slice_num, true);
+void motor_init(){
+    
 }
 
 void drive(uint pwm){
     int level = 0;
-    uint slice_num1 = pwm_gpio_to_slice_num(L);
-    uint slice_num2 = pwm_gpio_to_slice_num(R);
-    uint chan1 = pwm_gpio_to_channel(L);
-    uint chan2 = pwm_gpio_to_channel(R);
 
     if(pwm > 0){
-        level = constrain(pwm, 0, -255);
-        pwm_set_chan_level(slice_num1, chan1, level);
-        pwm_set_chan_level(slice_num2, chan2, 0);
+        level = constrain(pwm, 255, 0);
+        pwm_set_chan_level(motor1_slice, chan1, 255);
+        pwm_set_chan_level(motor2_slice, chan2, (255-level));
     }else if(pwm < 0){
         level = constrain(pwm, 255, 0);
-        pwm_set_chan_level(slice_num1, chan1, level);
-        pwm_set_chan_level(slice_num2, chan2, 255);
+        pwm_set_chan_level(motor1_slice, chan1, (255+level));
+        pwm_set_chan_level(motor2_slice, chan2, 255);
     }else if(pwm == 0){
         level = 0;
-        pwm_set_chan_level(slice_num1, chan1, level);
+        pwm_set_chan_level(motor1_slice, chan1, 255);
+        pwm_set_chan_level(motor2_slice, chan2, 255);
     }
 }
 

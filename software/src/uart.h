@@ -9,9 +9,8 @@ extern int uart_idx;
 
 void get_uart_buf();
 void print_uart_buf();
-
-static inline void clear_buf() {
-    uart_idx = 0;
-} 
+void parse_uart_buf();
+void make_buf();
+static inline void clear_buf() {uart_idx = 0;}
 
 #endif

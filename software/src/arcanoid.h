@@ -3,7 +3,12 @@
 
 #include "pico/stdlib.h"
 //motor 
-void motor_init(uint GPIO);
+extern uint motor1_slice;
+extern uint motor2_slice;
+extern uint chan1;
+extern uint chan2;
+
+void motor_init();
 void drive(uint pwm);
 
 //servo
