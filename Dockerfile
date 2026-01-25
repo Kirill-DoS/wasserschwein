@@ -1,28 +1,40 @@
-FROM nvidia/cuda:11.8.0-cudnn8-runtime-ubuntu20.04
+# FROM nvidia/cuda:12.1.1-cudnn8-runtime-ubuntu22.04
 
-# Устанавливаем Python 3.11 и системные зависимости для OpenCV
-RUN apt-get update && apt-get install -y \
-    python3.11 \
-    python3-pip \
-    python3.11-dev \
-    libgl1 \
-    libglib2.0-0 \
-    libsm6 \
-    libxext6 \
-    libxrender-dev \
-    libgl-dev \
-    && rm -rf /var/lib/apt/lists/* \
-    && ln -s /usr/bin/python3.11 /usr/bin/python
+# # Устанавливаем системные зависимости
+# RUN apt-get update && apt-get install -y \
+#     python3.10 \
+#     python3-pip \
+#     python3.10-venv \
+#     libgl1-mesa-glx \
+#     libglib2.0-0 \
+#     wget \
+#     git \
+#     && rm -rf /var/lib/apt/lists/*
+
+# # Устанавливаем рабочую директорию
+# WORKDIR /app
+
+# # Копируем файлы проекта
+# COPY requirements.txt .
+# COPY app.py .
+
+# # Устанавливаем Python зависимости
+# RUN pip3 install -r requirements.txt
+
+# # Создаем папки для входных/выходных данных
+# RUN mkdir -p /app/input /app/output
+
+# # Команда по умолчанию
+# CMD ["python3", "app.py"]
+
+FROM nvidia/cuda:12.1.1-cudnn8-runtime-ubuntu22.04
 
 WORKDIR /app
 
-COPY requirements.txt .
-
-RUN pip install --upgrade pip
-# Устанавливаем torch с CUDA 11.8
-RUN pip install torch==2.1.2 torchvision==0.16.2 torchaudio==2.1.2 --index-url https://download.pytorch.org/whl/cu118
-RUN pip install -r requirements.txt
-
+# Копируем все файлы
 COPY . .
 
-CMD ["python", "cheks.py"]
+# Устанавливаем зависимости
+RUN pip install --no-cache-dir ultralytics opencv-python-headless torch torchvision
+
+CMD ["python", "app.py"]
