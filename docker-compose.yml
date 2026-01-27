@@ -1,22 +1,28 @@
-version: '3.9'
+# version: '3.9'
 
 services:
-  model:
+  yolo:
     build: .
-    container_name: ultralytics
-    command: python cheks.py 
-    volumes:
-      - .:/app
-    # ↓ КРИТИЧЕСКИ ВАЖНО: доступ к GPU ↓
+    container_name: yolo11n-gpu
+    runtime: nvidia
     deploy:
       resources:
         reservations:
           devices:
             - driver: nvidia
-              count: 1
+              count: all
               capabilities: [gpu]
-    # ИЛИ альтернативный вариант (новые версии Docker):
-    # runtime: nvidia
     environment:
       - NVIDIA_VISIBLE_DEVICES=all
       - NVIDIA_DRIVER_CAPABILITIES=compute,utility
+    volumes:
+      - ./input:/app/input
+      - ./output:/app/output
+      # Для сохранения весов модели
+      - ./models:/root/.cache/torch/hub/checkpoints
+    ports:
+      - "7860:7860"  # Если используется Gradio/FastAPI
+    stdin_open: true
+    tty: true
+    # Для увеличения доступной памяти (опционально)
+    shm_size: '5gb'

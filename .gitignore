@@ -1,3 +1,4 @@
 /build
 /software/build
 /software/src/parse.h
+/3D_models/**/*.FCBak
