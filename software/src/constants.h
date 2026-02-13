@@ -2,6 +2,7 @@
 #define CONSTANTS_H
 #include "hardware/clocks.h"
 
+
 //motor constants
 #define SYS_FREQ clock_get_hz(clk_sys)
 #define MOTOR_WRAP 255
@@ -12,7 +13,7 @@
 #define SERVO_WRAP 19999
 #define SERVO_DIVIDER 125.0f
 
-//pins 
+//pins
 #define UART_ID uart0
 #define BAUDRATE 9600
 #define TX 0
@@ -22,5 +23,6 @@
 #define SERVO2 13
 #define L 10
 #define R 11
+#define BAT 26
 
 #endif

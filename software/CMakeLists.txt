@@ -2,23 +2,65 @@ cmake_minimum_required(VERSION 3.12)
 
 # Подключаем Pico SDK (путь берется из переменной окружения)
 include($ENV{PICO_SDK_PATH}/external/pico_sdk_import.cmake)
-
 # Название проекта (не влияет на имя выходного файла)
 project(wasserschwein)
+
+set(CMAKE_C_STANDARD 11)
 
 # Инициализация SDK
 pico_sdk_init()
 
 # Создаем исполняемый файл из main.c и называем его "arcanoid__main_file"
-add_executable(arcanoid_main_file src/main.c src/arcanoid.c src/uart.c)
+add_executable(arcanoid_main_file
+    src/main.c
+    src/arcanoid.c
+    src/uart.c
+)
 
 pico_enable_stdio_uart(arcanoid_main_file 1)
 pico_enable_stdio_usb(arcanoid_main_file 1)
 
+# Подключаем стандартную библиотеку Pico
+target_link_libraries(arcanoid_main_file
+    pico_stdlib
+    hardware_uart
+    hardware_pwm
+    hardware_clocks
+    hardware_adc
+)
+
 # Генерируем .uf2, .hex, .bin
 pico_add_extra_outputs(arcanoid_main_file)
 
-# Подключаем стандартную библиотеку Pico
-target_link_libraries(arcanoid_main_file pico_stdlib hardware_uart hardware_pwm hardware_clocks)
-
-pico_add_extra_outputs(arcanoid_main_file)
+# cmake_minimum_required(VERSION 3.13)
+#
+# include($ENV{PICO_SDK_PATH}/external/pico_sdk_import.cmake)
+#
+# project(arcanoid_main_file C)
+#
+# set(CMAKE_C_STANDARD 11)
+#
+# pico_sdk_init()
+#
+#
+# # Создаем исполняемый файл
+# add_executable(arcanoid_main_file
+#     src/main.c
+#     src/arcanoid.c
+#     src/uart.c
+# )
+#
+#
+#
+#
+# target_link_libraries(arcanoid_main_file
+#     pico_stdlib
+#     hardware_uart
+#     hardware_pwm
+#     hardware_clocks
+#     hardware_adc
+# )
+#
+# # Создаем .uf2 файл
+# pico_add_extra_outputs(arcanoid_main_file)
+#

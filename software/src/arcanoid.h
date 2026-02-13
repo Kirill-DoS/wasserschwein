@@ -2,14 +2,15 @@
 #define ARCANOID_H
 
 #include "pico/stdlib.h"
-//motor 
+//motor
 extern uint motor1_slice;
 extern uint motor2_slice;
 extern uint chan1;
 extern uint chan2;
-
+extern uint servo1_slice;
+extern uint servo2_slice;
 void motor_init();
-void drive(uint pwm);
+void drive(int pwm);
 
 //servo
 void servo_init(uint GPIO);
