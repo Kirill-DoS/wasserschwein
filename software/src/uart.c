@@ -69,7 +69,7 @@ void parse_uart_buf(){
 
         drive(value);
 
-        //uart_puts(UART_ID, "Motor\n");
+        //uart_puts(UART_ID, new_uart_buf);
         //printf("Motor command: %c, value: %d, bytes: 0x%02X 0x%02X\n",
         //       cmd_char, value, new_uart_buf[1], new_uart_buf[2]);
 
@@ -107,6 +107,6 @@ void parse_uart_buf(){
     //     printf("ADC val: %d\n", battery_charge(BAT));
     // }
     else{
-        uart_puts(UART_ID, "error");
+        uart_puts(UART_ID, "error\n");
     }
 }
