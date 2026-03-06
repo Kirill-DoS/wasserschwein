@@ -5,27 +5,35 @@
 #include "hardware/uart.h"
 #include "hardware/pwm.h"
 #include "hardware/clocks.h"
+#include "hardware/adc.h"
+
+#include <stdio.h>
 
 //-------------DC motor-----------
-
+char debug_buf[20];
+bool IS_DEBUG = true;
 
 void motor_init(){
-    
+
 }
 
-void drive(uint pwm){
-    int level = 0;
+void drive(int pwm){
+    //uart_puts(UART_ID, "drive\n");
+    int level = pwm;
 
     if(pwm > 0){
-        level = constrain(pwm, 255, 0);
+        //printf("pwm more 0\n");
+        // level = constrain(pwm, 255, 0);
         pwm_set_chan_level(motor1_slice, chan1, 255);
         pwm_set_chan_level(motor2_slice, chan2, (255-level));
     }else if(pwm < 0){
-        level = constrain(pwm, 255, 0);
+        //printf("pwm less 0\n");
+        //level = constrain(pwm, 0, -255);
         pwm_set_chan_level(motor1_slice, chan1, (255+level));
         pwm_set_chan_level(motor2_slice, chan2, 255);
     }else if(pwm == 0){
-        level = 0;
+        //printf("pwm equal 0\n");
+        //level = 0;
         pwm_set_chan_level(motor1_slice, chan1, 255);
         pwm_set_chan_level(motor2_slice, chan2, 255);
     }
@@ -35,7 +43,7 @@ void drive(uint pwm){
 
 void servo_init(uint GPIO){
     uint slice_num = pwm_gpio_to_slice_num(GPIO);
-    
+
     pwm_set_clkdiv(slice_num, SERVO_DIVIDER);
     pwm_set_wrap(slice_num, SERVO_WRAP);
     pwm_set_enabled(slice_num, true);
@@ -43,13 +51,16 @@ void servo_init(uint GPIO){
 
 void esc_set_speed(uint pulse_us, uint num)
 {
-    pulse_us = constrain(pulse_us, 1000, 2000);
-
-    uint slice_num = pwm_gpio_to_slice_num(num);
-    uint chan = pwm_gpio_to_channel(num);
+    //pulse_us = constrain(pulse_us, 2000, 1000);
     uint level = (pulse_us * (SERVO_WRAP + 1)) / 20000;
 
-    pwm_set_chan_level(slice_num, chan, level);
+    if(num = SERVO1){
+        uint chan = pwm_gpio_to_channel(SERVO1);
+        pwm_set_chan_level(servo1_slice, chan, level);
+    } else if(num = SERVO2){
+        uint chan = pwm_gpio_to_channel(SERVO2);
+        pwm_set_chan_level(servo2_slice, chan, level);
+    }
 }
 
 void write_ms(uint degree, uint num){
@@ -57,16 +68,24 @@ void write_ms(uint degree, uint num){
 
     uint slice_num = pwm_gpio_to_slice_num(num);
     uint chan = pwm_gpio_to_channel(num);
-    
+
 }
 //------------comutation-----------------
 //init
 #define BUTTON_PIN 5
 #define BATTERY_PIN 26
 
-float battery_charge(uint GPIO) {return 1.0;}
+float battery_charge(uint GPIO) {
+        adc_init();
+        adc_gpio_init(26);
+        adc_select_input(0);
+        float val = adc_read();
+        return val;
+}
 
-void button_clicked(uint GPIO){}
+void button_clicked(uint GPIO){
+
+}
 
 int constrain(int value, int high_level, int low_level)
 {
