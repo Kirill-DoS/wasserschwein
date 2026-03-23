@@ -54,13 +54,8 @@ void esc_set_speed(uint pulse_us, uint num)
     //pulse_us = constrain(pulse_us, 2000, 1000);
     uint level = (pulse_us * (SERVO_WRAP + 1)) / 20000;
 
-    if(num = SERVO1){
-        uint chan = pwm_gpio_to_channel(SERVO1);
-        pwm_set_chan_level(servo1_slice, chan, level);
-    } else if(num = SERVO2){
-        uint chan = pwm_gpio_to_channel(SERVO2);
-        pwm_set_chan_level(servo2_slice, chan, level);
-    }
+    uint chan = pwm_gpio_to_channel(num);
+    pwm_set_chan_level(pwm_gpio_to_slice_num(num), chan, level);
 }
 
 void write_ms(uint degree, uint num){

@@ -9,6 +9,7 @@ extern uint chan1;
 extern uint chan2;
 extern uint servo1_slice;
 extern uint servo2_slice;
+
 void motor_init();
 void drive(int pwm);
 

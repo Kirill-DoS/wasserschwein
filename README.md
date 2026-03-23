@@ -16,3 +16,6 @@
     B <value> motor drive back, value range 0-255
     L <value> left BLCD, value range 
     R <value> right BLCD, value range
+
+    black ESC 1000 - 2000; 1000 - stop, 2000 max, 12 pin
+    yellow ESC
