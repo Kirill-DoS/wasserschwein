@@ -67,7 +67,7 @@ def main():
         cv2.imshow("Arkanoid Vision System", processed_frame)
 
         # Выход на ESC
-        if cv2.waitKey(1) & 0xFF == 27:
+        if cv2.waitKey(10) & 0xFF == 27:
             break
 
     cap.release()
