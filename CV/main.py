@@ -1,73 +1,56 @@
 import cv2
 import os
+import time
 import numpy as np
-
-# Импортируем твои классы из файлов в папке CV
 from BallTracker import BallTracker
 from ColorCalibrate import ColorCalibrator
 from Polygon import PolygonMarker
 
+CamId = 1
+
 def main():
-    # 1. Список необходимых файлов .npy
-    required_files = [
-        'perimeter.npy', 
-        'left_wall.npy', 
-        'right_wall.npy', 
-        'robot_beam.npy'
-    ]
-    
-    # Проверяем наличие ВСЕХ файлов
-    files_exist = all(os.path.exists(f) for f in required_files)
-
-    if not files_exist:
-        print("Файлы геометрии не найдены. Запуск разметки полигона...")
-        marker = PolygonMarker()
-        # Предполагаем, что внутри Polygon.py есть метод run(), 
-        # который открывает камеру, дает разметить и сохраняет файлы
-        marker.run() 
+    required_files = ['perimeter.npy', 'left_wall.npy', 'right_wall.npy', 'robot_beam.npy']
+    if not all(os.path.exists(f) for f in required_files):
+        print(" Файлы геометрии не найдены. Запуск разметки...")
+        PolygonMarker().run()
     else:
-        print("Геометрия загружена успешно.")
+        print("✅ Геометрия загружена.")
 
-    # 2. Запуск калибровки цвета
-    # Создаем объект калибровщика. Он должен вернуть lower и upper границы HSV
-    calibrator = ColorCalibrator(camera_index=0)
+    print("🎨 Запуск калибровки цвета...")
+    calibrator = ColorCalibrator(CamId)
     color_lower, color_upper = calibrator.calibrate()
-    print(f"Цвет мяча откалиброван: {color_lower} -> {color_upper}")
+    print(f" Цвет сохранён: lower={color_lower}, upper={color_upper}")
 
-    # 3. Инициализация и запуск BallTracker
-    # Передаем пути к файлам и настроенные цвета
-    tracker = BallTracker(
-        homography_path='perimeter.npy',
-        wall_l_path='left_wall.npy',
-        wall_r_path='right_wall.npy',
-        beam_path='robot_beam.npy'
-    )
-    
-    # Устанавливаем цвета, которые получили на шаге 2
+    # ⏱️ Пауза 0.5 сек, чтобы Windows гарантированно сняла блокировку с камеры
+    print("⏳ Освобождение ресурса камеры...")
+    time.sleep(0.5)
+
+    tracker = BallTracker('perimeter.npy', 'left_wall.npy', 'right_wall.npy', 'robot_beam.npy')
     tracker.color_lower = color_lower
     tracker.color_upper = color_upper
 
-    # Основной цикл работы
-    cap = cv2.VideoCapture(0)
-    cap.set(cv2.CAP_PROP_FPS, 120) # Устанавливаем 60 FPS для C922
-
-    print("Система запущена. Нажми 'ESC' для выхода.")
+    # 📷 Используем DirectShow для стабильности на Windows
+    cap = cv2.VideoCapture(CamId, cv2.CAP_DSHOW)
+    if not cap.isOpened():
+        print("❌ Не удалось открыть камеру после калибровки!")
+        return
+    
+    cap.set(cv2.CAP_PROP_FPS, 60)
+    cap.set(cv2.CAP_PROP_FRAME_WIDTH, 1280)
+    cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 720)
+    
+    print("🚀 Система запущена. Нажми 'ESC' для выхода.")
     
     while True:
         ret, frame = cap.read()
         if not ret:
-            break
-
-        # Получаем данные: точка пересечения с балкой и точки траектории для рисования
-        target_point, trajectory = tracker.get_prediction(frame)
+            continue  # Не прерываем цикл, просто ждём следующий кадр
+            
+        target, trajectory = tracker.get_prediction(frame)
+        debug_frame = tracker.draw_debug(frame, trajectory)
         
-        # Отрисовка (N точек зеленая линия, прогноз - синяя)
-        processed_frame = tracker.draw_debug(frame, trajectory)
-        
-        cv2.imshow("Arkanoid Vision System", processed_frame)
-
-        # Выход на ESC
-        if cv2.waitKey(10) & 0xFF == 27:
+        cv2.imshow("Arkanoid Vision", debug_frame)
+        if cv2.waitKey(1) & 0xFF == 27:
             break
 
     cap.release()

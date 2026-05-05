@@ -3,171 +3,162 @@ import numpy as np
 
 class BallTracker:
     def __init__(self, homography_path, wall_l_path, wall_r_path, beam_path):
-        # 1. Загрузка матрицы гомографии
+        # 1. Загрузка гомографии и масштаба
         self.M = np.load(homography_path)
         self.M_inv = np.linalg.inv(self.M)
-        
-        # Гомография из Polygon.py маппит в 800x600. Переводим в реальные мм (1500x1500)
-        self.scale_xy = np.array([1500.0/800.0, 1500.0/600.0], dtype=np.float32)
+        # Виртуальные 800x600 -> реальные 1500x1500 мм (по PolygonReglament.csv)
+        self.scale_mm = np.array([1500.0/800.0, 1500.0/600.0], dtype=np.float32)
 
-        # 2. Загрузка геометрии и перевод в мм
-        self.wall_l = self._to_mm(np.load(wall_l_path))
-        self.wall_r = self._to_mm(np.load(wall_r_path))
-        self.beam = self._to_mm(np.load(beam_path))
+        # 2. Геометрия сразу в миллиметрах
+        self.wall_l_mm = self._px_to_mm(np.load(wall_l_path))
+        self.wall_r_mm = self._px_to_mm(np.load(wall_r_path))
+        self.beam_mm = self._px_to_mm(np.load(beam_path))
         
-        # Границы стенок по X (учитываем небольшой наклон после гомографии)
-        self.wall_l_x = np.min(self.wall_l[:, 0])
-        self.wall_r_x = np.max(self.wall_r[:, 0])
+        self.wall_l_x = np.min(self.wall_l_mm[:, 0])
+        self.wall_r_x = np.max(self.wall_r_mm[:, 0])
         self.center_x = (self.wall_l_x + self.wall_r_x) / 2.0
 
-        # 3. Физические параметры (настроены под регламент)
-        # Выпуклость 35мм создаёт возвращающее ускорение к центру. 
-        # a_x ≈ -g * (2*h / (W/2)^2) * dx ≈ -1.2 * dx (мм/с² на мм отклонения)
-        self.curvature_k = 1.2          
-        self.friction = 0.015           # Затухание скорости на шаг (качение)
-        self.restitution = 0.82         # Потеря энергии при отскоке от стенки
-        self.dt = 0.01                  # Шаг симуляции 10мс (стабильно для 60-120 FPS)
-        self.max_sim_steps = 250        # Макс. шагов прогноза
+        # 3. Физика (регламент: выпуклость 35мм, отскок, трение)
+        self.curvature_k = 1.2
+        self.friction = 0.015
+        self.restitution = 0.82
+        self.dt = 0.016  # Шаг ~60 FPS
+        self.max_sim_steps = 200
 
-        # 4. Фильтр Калмана [x, y, vx, vy]
+        # 4. Калман в пикселях (стабильнее для детекции)
         self.kf = cv2.KalmanFilter(4, 2)
         self.kf.measurementMatrix = np.array([[1,0,0,0],[0,1,0,0]], np.float32)
         self.kf.transitionMatrix = np.array([[1,0,self.dt,0],[0,1,0,self.dt],[0,0,1,0],[0,0,0,1]], np.float32)
         self.kf.processNoiseCov = np.eye(4, dtype=np.float32) * 0.05
         self.kf.measurementNoiseCov = np.eye(2, dtype=np.float32) * 5.0
-        self.kf.errorCovPost = np.eye(4, dtype=np.float32)
-        self.kf.statePost = np.zeros((4, 1), np.float32)
         self.kf_initialized = False
 
-        # Цветовые пороги (по умолчанию оранжевый, перезаписываются из main.py)
+        # Цвета (перезаписываются из main.py)
         self.color_lower = np.array([0, 120, 120])
         self.color_upper = np.array([15, 255, 255])
 
-        self.history = []
+        self.history_px = []
         self.max_history = 15
+        self.last_detection_px = None  # Для отрисовки текущего мяча
 
-    def _to_mm(self, pts):
-        """Перевод пикселей виртуальной гомографии в миллиметры"""
-        pts = np.array(pts, dtype=np.float32).reshape(-1, 1, 2)
-        pts_h = cv2.perspectiveTransform(pts, self.M).reshape(-1, 2)
-        return pts_h * self.scale_xy
+    def _px_to_mm(self, pts_px):
+        pts_px = np.array(pts_px, dtype=np.float32).reshape(-1, 1, 2)
+        pts_virt = cv2.perspectiveTransform(pts_px, self.M).reshape(-1, 2)
+        return pts_virt * self.scale_mm
 
-    def _to_pixel(self, pts):
-        """Перевод миллиметров обратно в пиксели исходного кадра"""
-        pts = np.array(pts, dtype=np.float32).reshape(-1, 1,2) / self.scale_xy
-        pts_h = cv2.perspectiveTransform(pts, self.M_inv).reshape(-1, 2)
-        return pts_h.astype(int)
+    def _mm_to_px(self, pts_mm):
+        pts_mm = np.array(pts_mm, dtype=np.float32).reshape(-1, 1, 2)
+        pts_virt = pts_mm / self.scale_mm
+        pts_px = cv2.perspectiveTransform(pts_virt, self.M_inv).reshape(-1, 2)
+        return pts_px.astype(int)
 
-    def _check_beam_intersection(self, p1, p2):
-        """Проверяет пересечение отрезка p1->p2 с линией балки. Возвращает точку пересечения или None"""
-        # Уравнение прямой балки: A*x + B*y + C = 0
-        x1, y1 = self.beam[0]; x2, y2 = self.beam[1]
-        A = y1 - y2; B = x2 - x1; C = -A*x1 - B*y1
-        
-        denom = A*(p2[0]-p1[0]) + B*(p2[1]-p1[1])
-        if abs(denom) < 1e-5: return None
-        
-        t = -(A*p1[0] + B*p1[1] + C) / denom
-        if 0.0 <= t <= 1.0:
-            inter_x = p1[0] + t * (p2[0] - p1[0])
-            inter_y = p1[1] + t * (p2[1] - p1[1])
-            # Проверяем, попадает ли точка пересечения в отрезок балки
-            if min(x1,x2)-10 <= inter_x <= max(x1,x2)+10:
-                return np.array([inter_x, inter_y])
-        return None
+    def _line_intersection(self, p1, p2, p3, p4):
+        x1, y1 = p1; x2, y2 = p2
+        x3, y3 = p3; x4, y4 = p4
+        denom = (y4 - y3) * (x2 - x1) - (x4 - x3) * (y2 - y1)
+        if abs(denom) < 1e-5: return None, float('inf')
+        ua = ((x4 - x3) * (y1 - y3) - (y4 - y3) * (x1 - x3)) / denom
+        ub = ((x2 - x1) * (y1 - y3) - (y2 - y1) * (x1 - x3)) / denom
+        if 0 <= ua <= 1 and 0 <= ub <= 1:
+            return np.array([x1 + ua*(x2-x1), y1 + ua*(y2-y1)]), ua 
+        return None, float('inf')
 
     def get_prediction(self, frame):
-        # 1. Детекция мяча
+        if frame is None: return [0, 0], [[0, 0]]
+
+        # 1. Детекция
         hsv = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
         mask = cv2.inRange(hsv, self.color_lower, self.color_upper)
         cnts, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
 
-        detection = None
+        detection_px = None
         if cnts:
             c = max(cnts, key=cv2.contourArea)
             ((x, y), r) = cv2.minEnclosingCircle(c)
-            # Фильтр по размеру (мяч 43мм ~ 15-35px в зависимости от расстояния)
-            if 10 < r < 50:
-                detection = np.array([[x], [y]], dtype=np.float32)
+            if 10 < r < 50:  # Фильтр шума (мяч 43мм)
+                detection_px = np.array([[x], [y]], dtype=np.float32)
 
-        # 2. Обновление Калмана (исправлен порядок вызовов)
-        if detection is not None:
-            self.kf.correct(detection)
+        # 2. Калман
+        if detection_px is not None:
             if not self.kf_initialized:
-                # Инициализация состояния при первом обнаружении
-                self.kf.statePost[0] = detection[0]
-                self.kf.statePost[1] = detection[1]
-                self.kf.statePost[2] = 0.0
-                self.kf.statePost[3] = 0.0
+                self.kf.statePost[0,0] = detection_px[0,0]
+                self.kf.statePost[1,0] = detection_px[1,0]
+                self.kf.statePost[2,0] = 0.0
+                self.kf.statePost[3,0] = 0.0
                 self.kf_initialized = True
-        else:
-            # Если детекция пропала, Калман продолжит прогнозировать по инерции
-            pass
+            self.kf.correct(detection_px)
+            self.last_detection_px = detection_px.flatten().astype(int)
 
-        # Получаем сглаженное состояние в мм
         state = self.kf.predict()
-        curr_mm = state[:2].flatten().astype(float)
-        vel_mm = state[2:].flatten().astype(float)
+        curr_px = state[:2].flatten().astype(int)
+        vel_px = state[2:].flatten()
 
-        # Сохраняем историю для отладки
-        curr_px = self._to_pixel([curr_mm])[0]
-        self.history.append(curr_px)
-        if len(self.history) > self.max_history:
-            self.history.pop(0)
+        # История для отрисовки
+        self.history_px.append(curr_px)
+        if len(self.history_px) > self.max_history:
+            self.history_px.pop(0)
 
+        # Если фильтр ещё не готов, возвращаем текущую точку (чтобы draw_debug что-то нарисовал)
         if not self.kf_initialized:
-            return None, []
+            return curr_px, [curr_px]
 
-        # 3. Физическое моделирование траектории
+        # 3. Физика в миллиметрах
+        curr_mm = self._px_to_mm([curr_px])[0]
+        vel_mm = vel_px * self.scale_mm
+
+        if np.linalg.norm(vel_mm) < 0.5:
+            return curr_px, [curr_px]
+
         trajectory_px = [curr_px]
-        pos = curr_mm.copy()
-        vel = vel_mm.copy()
+        pos_mm = curr_mm.copy()
+        vel_mm = vel_mm.copy()
 
         for _ in range(self.max_sim_steps):
-            prev_pos = pos.copy()
+            prev_pos_mm = pos_mm.copy()
+            ax = -self.curvature_k * (pos_mm[0] - self.center_x)
+            vel_mm *= (1.0 - self.friction)
+            vel_mm[0] += ax * self.dt
+            pos_mm += vel_mm * self.dt
 
-            # Применяем кривизну дна (возврат к центру поля)
-            ax = -self.curvature_k * (pos[0] - self.center_x)
-            ay = 0.0
-
-            # Трение
-            vel *= (1 - self.friction)
-
-            # Интегрирование (полу-неявный Эйлер)
-            vel[0] += ax * self.dt
-            pos += vel * self.dt
-
-            # Проверка пересечения с балкой робота
-            inter = self._check_beam_intersection(prev_pos, pos)
-            if inter is not None:
-                trajectory_px.append(self._to_pixel([inter])[0])
-                break  # Строго останавливаемся на линии робота
+            # Пересечение с балкой
+            inter_mm, t = self._line_intersection(prev_pos_mm, pos_mm, self.beam_mm[0], self.beam_mm[1])
+            if inter_mm is not None and 0 <= t <= 1:
+                b1, b2 = self.beam_mm[0], self.beam_mm[1]
+                if min(b1[0], b2[0]) - 30 <= inter_mm[0] <= max(b1[0], b2[0]) + 30:
+                    trajectory_px.append(self._mm_to_px([inter_mm])[0])
+                    break
 
             # Отскок от стенок
-            if pos[0] < self.wall_l_x:
-                vel[0] = -vel[0] * self.restitution
-                pos[0] = self.wall_l_x + 1.0
-            elif pos[0] > self.wall_r_x:
-                vel[0] = -vel[0] * self.restitution
-                pos[0] = self.wall_r_x - 1.0
+            if pos_mm[0] < self.wall_l_x:
+                vel_mm[0] = -vel_mm[0] * self.restitution
+                pos_mm[0] = self.wall_l_x + 1.0
+            elif pos_mm[0] > self.wall_r_x:
+                vel_mm[0] = -vel_mm[0] * self.restitution
+                pos_mm[0] = self.wall_r_x - 1.0
 
-            trajectory_px.append(self._to_pixel([pos])[0])
-
-            # Если мяч почти остановился
-            if np.linalg.norm(vel) < 0.8:
-                break
+            trajectory_px.append(self._mm_to_px([pos_mm])[0])
+            if np.linalg.norm(vel_mm) < 0.8: break
 
         return trajectory_px[-1], trajectory_px
 
     def draw_debug(self, frame, trajectory):
-        # Зеленая линия реальной истории
-        for i in range(1, len(self.history)):
-            cv2.line(frame, tuple(self.history[i-1]), tuple(self.history[i]), (0, 255, 0), 2)
+        # 1. Обводка текущего мяча (зелёный круг + опционально квадрат)
+        if self.last_detection_px is not None:
+            x, y = self.last_detection_px
+            cv2.circle(frame, (int(x), int(y)), 12, (0, 255, 0), 2)
+            # Квадрат вокруг мяча (раскомментировать если нужен именно квадрат)
+            # cv2.rectangle(frame, (x-15, y-15), (x+15, y+15), (0, 255, 0), 2)
+
+        # 2. Зелёная линия пройденного пути
+        for i in range(1, len(self.history_px)):
+            cv2.line(frame, tuple(self.history_px[i-1]), tuple(self.history_px[i]), (0, 255, 0), 2)
             
-        # Синяя линия прогноза
+        # 3. Синяя линия прогноза
         if len(trajectory) > 1:
             for i in range(1, len(trajectory)):
                 cv2.line(frame, tuple(trajectory[i-1]), tuple(trajectory[i]), (255, 0, 0), 2)
-            # Красная точка цели на балке
             cv2.circle(frame, tuple(trajectory[-1]), 6, (0, 0, 255), -1)
+        elif len(trajectory) == 1:
+            cv2.circle(frame, tuple(trajectory[0]), 6, (255, 0, 0), -1)
+            
         return frame

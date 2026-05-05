@@ -3,8 +3,8 @@ import numpy as np
 import os
 
 class PolygonMarker:
-    def __init__(self, camera_id=0):
-        self.camera_id = camera_id
+    def __init__(self, CamID):
+        self.camera_id = CamID
         self.cap = None
         self.points = []
         self.frame = None
@@ -20,7 +20,7 @@ class PolygonMarker:
     
     def _init_camera(self):
         """Инициализация камеры"""
-        self.cap = cv2.VideoCapture(self.camera_id)
+        self.cap = cv2.VideoCapture(self.camera_id, cv2.CAP_DSHOW)
         if not self.cap.isOpened():
             print(f"ОШИБКА: Не удалось открыть камеру {self.camera_id}")
             return False
