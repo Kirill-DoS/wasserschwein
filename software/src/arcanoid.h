@@ -21,6 +21,6 @@ void write_ms(uint degree, uint num);
 //comutation
 float battery_charge(uint GPIO);
 void button_clicked(uint GPIO);
-int constrain(int value, int low_level, int high_level);
+int constrain(int value, int high_level, int low_level);
 
 #endif

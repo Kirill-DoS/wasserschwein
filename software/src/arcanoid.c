@@ -51,8 +51,10 @@ void servo_init(uint GPIO){
 
 void esc_set_speed(uint pulse_us, uint num)
 {
-    //pulse_us = constrain(pulse_us, 2000, 1000);
+    pulse_us = constrain(pulse_us, 2300, 700);
+    //uint level = (pulse_us * 20000) / pulse_us - 1;
     uint level = (pulse_us * (SERVO_WRAP + 1)) / 20000;
+    //uint level = (pulse_us - 1000) * SERVO_WRAP / 1000;
 
     uint chan = pwm_gpio_to_channel(num);
     pwm_set_chan_level(pwm_gpio_to_slice_num(num), chan, level);

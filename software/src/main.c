@@ -16,6 +16,7 @@ uint servo1_slice = 0;
 uint servo2_slice = 0;
 
 void config(void);
+void callibrate_esc(void);
 
 int main(void){
     //IS_DEBUG = true;
@@ -25,6 +26,7 @@ int main(void){
     sleep_ms(1000);
 
     printf("RP2040 running!\n");
+    callibrate_esc();
     gpio_put(LED, 1);
 
     while(true){
@@ -38,6 +40,20 @@ int main(void){
     return 0;
 }
 
+void callibrate_esc(void){
+    esc_set_speed(1000, SERVO1);
+    esc_set_speed(1000, SERVO2);
+    sleep_ms(1000);
+    esc_set_speed(2000, SERVO1);
+    esc_set_speed(2000, SERVO2);
+    sleep_ms(1000);
+    esc_set_speed(1200, SERVO1);
+    esc_set_speed(1200, SERVO2);
+    sleep_ms(500);
+    esc_set_speed(1000, SERVO1);
+    esc_set_speed(1000, SERVO2);
+    printf("Callibration pass\n");
+}
 void config(void){
     gpio_set_function(L, GPIO_FUNC_PWM);
     gpio_set_function(R, GPIO_FUNC_PWM);
@@ -71,4 +87,8 @@ void config(void){
 
     chan1 = pwm_gpio_to_channel(L);
     chan2 = pwm_gpio_to_channel(R);
+
+     pwm_set_chan_level(motor1_slice, chan1, 0);
+    pwm_set_chan_level(motor2_slice, chan2, 0);
+
 }

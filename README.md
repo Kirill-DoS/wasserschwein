@@ -17,5 +17,5 @@
     L <value> left BLCD, value range 
     R <value> right BLCD, value range
 
-    black ESC 1000 - 2000; 1000 - stop, 2000 max, 12 pin
-    yellow ESC
+    black ESC 1000 - 2000; 1000 - stop, 2000 max, 12 pin, R<cmd>
+    yellow ESC 1000
