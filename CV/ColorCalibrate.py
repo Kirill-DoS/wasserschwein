@@ -1,25 +1,31 @@
 import cv2
 import numpy as np
+from Config import Config
 
 class ColorCalibrator:
-    def __init__(self, CamID):
+    def __init__(self, CamID, config=None):
         self.cap = cv2.VideoCapture(CamID)
         if not self.cap.isOpened():
             raise RuntimeError(f"❌ Не удалось открыть камеру {CamID}")
-        
+
+        self.config = config if config else Config()
+        lower, upper = self.config.get_color_bounds()
+
         cv2.namedWindow("Settings")
-        cv2.createTrackbar("H_min", "Settings", 0, 180, lambda x: None)
-        cv2.createTrackbar("S_min", "Settings", 100, 255, lambda x: None)
-        cv2.createTrackbar("V_min", "Settings", 100, 255, lambda x: None)
-        cv2.createTrackbar("H_max", "Settings", 15, 180, lambda x: None)
-        cv2.createTrackbar("S_max", "Settings", 255, 255, lambda x: None)
-        cv2.createTrackbar("V_max", "Settings", 255, 255, lambda x: None)
+        cv2.createTrackbar("H_min", "Settings", int(lower[0]), 180, lambda x: None)
+        cv2.createTrackbar("S_min", "Settings", int(lower[1]), 255, lambda x: None)
+        cv2.createTrackbar("V_min", "Settings", int(lower[2]), 255, lambda x: None)
+        cv2.createTrackbar("H_max", "Settings", int(upper[0]), 180, lambda x: None)
+        cv2.createTrackbar("S_max", "Settings", int(upper[1]), 255, lambda x: None)
+        cv2.createTrackbar("V_max", "Settings", int(upper[2]), 255, lambda x: None)
+
+        print("💡 Нажмите 'S' для сохранения настроек, ENTER для продолжения")
 
     def calibrate(self):
         print("🎨 Настрой цвет и нажми ENTER для сохранения...")
         lower = np.array([0, 100, 100])
         upper = np.array([15, 255, 255])
-        
+
         while True:
             ret, frame = self.cap.read()
             if not ret:
@@ -27,7 +33,7 @@ class ColorCalibrator:
                 break
 
             hsv = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
-            
+
             l_h = cv2.getTrackbarPos("H_min", "Settings")
             l_s = cv2.getTrackbarPos("S_min", "Settings")
             l_v = cv2.getTrackbarPos("V_min", "Settings")
@@ -45,12 +51,14 @@ class ColorCalibrator:
             cv2.imshow("Calibration: Mask", mask)
             cv2.imshow("Calibration: Result", result)
 
-            if cv2.waitKey(1) & 0xFF == 13:  # ENTER
+            key = cv2.waitKey(1) & 0xFF
+            if key == 13:  # ENTER
                 break
-        
+            elif key == ord('s'):  # S - сохранить настройки
+                self.config.set_color_bounds(lower, upper)
+                self.config.save()
+
         cv2.destroyAllWindows()
-        
-        # 🔑 КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ:
-        self.cap.release()  # Освобождаем драйвер камеры
-        del self.cap        # Удаляем объект из памяти
+        self.cap.release()
+        del self.cap
         return lower, upper
