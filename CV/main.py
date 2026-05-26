@@ -2,12 +2,15 @@ import cv2
 import os
 import time
 import numpy as np
+import serial
 from BallTracker import BallTracker
+from RobotTracker import RobotTracker
 from ColorCalibrate import ColorCalibrator
 from Polygon import PolygonMarker
 from Config import Config
 
-camID = 1
+# 0 built-in, 1 externam camera
+camID = 0
 
 def main():
     config = Config()
@@ -19,14 +22,14 @@ def main():
         print("✅ Геометрия загружена.")
 
     print("🎨 Запуск калибровки цвета...")
-    calibrator = ColorCalibrator(camID, config)
+    calibrator = ColorCalibrator(0)  # передай config если твоя версия требует
     color_lower, color_upper = calibrator.calibrate()
-    print(f" Цвет: lower={color_lower}, upper={color_upper}")
+    print(f"Цвет: lower={color_lower}, upper={color_upper}")
 
     config.set_color_bounds(color_lower, color_upper)
     config.save()
-
     time.sleep(0.5)
+
     tracker = BallTracker('perimeter.npy', 'left_wall.npy', 'right_wall.npy', 'robot_beam.npy')
     tracker.color_lower = color_lower
     tracker.color_upper = color_upper
@@ -45,11 +48,25 @@ def main():
     cap.set(cv2.CAP_PROP_FPS, 30)
     cap.set(cv2.CAP_PROP_FRAME_WIDTH, 960)
     cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 540)
-
-    for _ in range(5): cap.read()  # Сброс буфера
+    for _ in range(5): cap.read()
 
     last_frame_time = time.time()
     print("🚀 Система запущена. ESC для выхода.")
+
+    # BT Init
+    BT_PORT = '/dev/rfcomm0'
+    try:
+        ser = serial.Serial(BT_PORT, 9600, timeout=0.1)
+        print(f"✅ BT подключён к {BT_PORT}")
+    except serial.SerialException as e:
+        print(f"❌ Ошибка BT: {e}")
+        return
+
+    robot_tr = RobotTracker([100, 80, 80], [140, 255, 255], tracker.M, tracker.scale_mm)
+
+    STOP_DIST = 50.0
+    ALIGN_THRESHOLD = 100.0
+    KP = 0.6
 
     while True:
         now = time.time()
@@ -66,12 +83,35 @@ def main():
         tracker.set_dt(dt)
         target, trajectory = tracker.get_prediction(frame_small)
 
-        # Масштабируем траекторию под оригинальный кадр
+        robot_mm = robot_tr.get_position(frame_small)
+
+        if robot_mm is not None and target is not None:
+            t_pts = np.array([target], dtype=np.float32).reshape(-1, 1, 2)
+            target_mm = (cv2.perspectiveTransform(t_pts, tracker.M)[0, 0] * tracker.scale_mm)
+
+            # Ошибка только по оси балки (X)
+            error = target_mm[0] - robot_mm[0]
+            dist = abs(error)
+
+            if dist < STOP_DIST:
+                try: ser.write(b"F 0\n")
+                except: pass
+            else:
+                speed = int(np.clip(KP * dist, 0, 255))
+                direction = "F" if error > 0 else "B"
+
+                # 🔍 Отладочный вывод
+                print(f"[CMD] {direction} {speed:3d} | Error: {error:+6.1f}mm | Dist: {dist:5.1f}mm")
+
+                try: ser.write(f"{direction} {speed}\n".encode())
+                except: pass
+
         trajectory_scaled = [[int(p[0]*scale_x), int(p[1]*scale_y)] for p in trajectory]
         debug_frame = tracker.draw_debug(frame, trajectory_scaled, scale_x, scale_y)
 
         cv2.imshow("Arkanoid Vision", debug_frame)
-        if cv2.waitKey(1) & 0xFF == 27: break
+        if cv2.waitKey(1) & 0xFF == 27:
+            break
 
     cap.release()
     cv2.destroyAllWindows()
