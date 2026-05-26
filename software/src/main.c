@@ -29,6 +29,11 @@ int main(void){
     callibrate_esc();
     gpio_put(LED, 1);
 
+    //cleanup uart buffer
+    while(uart_is_readable(uart0)){
+        uart_getc(uart0);
+    }
+
     while(true){
         get_uart_buf();
         if(is_cmd_ready){
@@ -89,6 +94,6 @@ void config(void){
     chan2 = pwm_gpio_to_channel(R);
 
      pwm_set_chan_level(motor1_slice, chan1, 0);
-    pwm_set_chan_level(motor2_slice, chan2, 0);
+     pwm_set_chan_level(motor2_slice, chan2, 0);
 
 }

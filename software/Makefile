@@ -2,7 +2,7 @@
 PROJECT_NAME = arcanoid_main_file
 PICO_SDK_PATH = $(HOME)/pico/pico-sdk
 BUILD_DIR = build
-
+MOUNT_POINT = /run/media/arch/RPI-RP2
 all:
 	mkdir -p $(BUILD_DIR)
 	cd $(BUILD_DIR) && cmake -DPICO_SDK_PATH=$(PICO_SDK_PATH) ..
@@ -15,7 +15,10 @@ clean:
 	rm -rf $(BUILD_DIR)
 
 deploy:
-	cp $(BUILD_DIR)/$(PROJECT_NAME).uf2 /run/media/arch/RPI-RP2/
+	mkdir -p $(MOUNT_POINT)
+	sudo mount /dev/sdb1 &(MOUNT_POINT) || true
+	cp $(BUILD_DIR)/$(PROJECT_NAME).uf2 $(MOUNT_POINT)
+	sync
 
 help:
 	@echo "Доступные цели:"
