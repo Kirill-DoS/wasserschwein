@@ -17,7 +17,7 @@ clean:
 deploy:
 	mkdir -p $(MOUNT_POINT)
 	sudo mount /dev/sdb1 &(MOUNT_POINT) || true
-	cp $(BUILD_DIR)/$(PROJECT_NAME).uf2 $(MOUNT_POINT)
+	mv $(BUILD_DIR)/$(PROJECT_NAME).uf2 $(MOUNT_POINT)
 	sync
 
 help:

@@ -1,14 +1,19 @@
 # wasserschwein
 
-# connect to Bluetooth
+# 1 connect to Bluetooth
     
     connect to HC-06
     sudo rfcomm connect 0 98:D3:11:FD:1C:0B 1
     
+    for manual send
     send data
     picocom -b 9600 --echo /dev/rfcomm0
     picocom -b 9600 --echo --omap crcrlf --emap crcrlf /dev/rfcomm0
 
+# 2 start program
+
+    python3 main.py
+    
     
 # command 
     

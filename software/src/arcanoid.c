@@ -11,7 +11,6 @@
 
 //-------------DC motor-----------
 char debug_buf[20];
-bool IS_DEBUG = true;
 
 void motor_init(){
 
@@ -69,8 +68,6 @@ void write_ms(uint degree, uint num){
 }
 //------------comutation-----------------
 //init
-#define BUTTON_PIN 5
-#define BATTERY_PIN 26
 
 float battery_charge(uint GPIO) {
         adc_init();
@@ -80,8 +77,13 @@ float battery_charge(uint GPIO) {
         return val;
 }
 
-void button_clicked(uint GPIO){
-
+bool button_clicked(uint GPIO){
+    if(gpio_get(GPIO) == 0){
+        sleep_ms(20):
+        if(gpio_get(GPIO) == 0){
+            return true;
+        }
+    }else {return false;}
 }
 
 int constrain(int value, int high_level, int low_level)

@@ -20,7 +20,7 @@ void write_ms(uint degree, uint num);
 
 //comutation
 float battery_charge(uint GPIO);
-void button_clicked(uint GPIO);
+bool button_clicked(uint GPIO);
 int constrain(int value, int high_level, int low_level);
 
 #endif

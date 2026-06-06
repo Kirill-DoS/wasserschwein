@@ -9,8 +9,7 @@ from ColorCalibrate import ColorCalibrator
 from Polygon import PolygonMarker
 from Config import Config
 
-# 0 built-in, 1 externam camera
-camID = 0
+camID = 1
 
 def main():
     config = Config()
@@ -22,7 +21,7 @@ def main():
         print("✅ Геометрия загружена.")
 
     print("🎨 Запуск калибровки цвета...")
-    calibrator = ColorCalibrator(0)  # передай config если твоя версия требует
+    calibrator = ColorCalibrator(camID)
     color_lower, color_upper = calibrator.calibrate()
     print(f"Цвет: lower={color_lower}, upper={color_upper}")
 
@@ -37,7 +36,6 @@ def main():
     physics = config.get_physics_params()
     tracker.curvature_k = physics.get("curvature_k", 0.08)
     tracker.friction = physics.get("friction", 0.006)
-    tracker.restitution = physics.get("restitution", 0.82)
 
     cap = cv2.VideoCapture(camID)
     if not cap.isOpened():
@@ -51,12 +49,18 @@ def main():
     for _ in range(5): cap.read()
 
     last_frame_time = time.time()
+    last_bt_send_time = 0
+    BT_SEND_INTERVAL = 0.04  # Отправляем команды не чаще чем раз в 40 мс, чтобы не забить буфер BT
+
+    last_direction = ""
+    last_speed = -1
+
     print("🚀 Система запущена. ESC для выхода.")
 
     # BT Init
     BT_PORT = '/dev/rfcomm0'
     try:
-        ser = serial.Serial(BT_PORT, 9600, timeout=0.1)
+        ser = serial.Serial(BT_PORT, 9600, timeout=0.05)
         print(f"✅ BT подключён к {BT_PORT}")
     except serial.SerialException as e:
         print(f"❌ Ошибка BT: {e}")
@@ -64,9 +68,8 @@ def main():
 
     robot_tr = RobotTracker([100, 80, 80], [140, 255, 255], tracker.M, tracker.scale_mm)
 
-    STOP_DIST = 50.0
-    ALIGN_THRESHOLD = 100.0
-    KP = 0.6
+    STOP_DIST_MM = 20.0     # Мертвая зона (в мм). Если погрешность меньше 2 см, робот не дергается
+    KP = 1.3                # Коэффициент пропорциональности регулятора скорости
 
     while True:
         now = time.time()
@@ -81,33 +84,37 @@ def main():
         scale_x, scale_y = frame.shape[1] / 640.0, frame.shape[0] / 360.0
 
         tracker.set_dt(dt)
-        target, trajectory = tracker.get_prediction(frame_small)
 
+        # target_mm возвращается СРАЗУ В МИЛЛИМЕТРАХ
+        target_mm, trajectory_px = tracker.get_prediction(frame_small)
         robot_mm = robot_tr.get_position(frame_small)
 
-        if robot_mm is not None and target is not None:
-            t_pts = np.array([target], dtype=np.float32).reshape(-1, 1, 2)
-            target_mm = (cv2.perspectiveTransform(t_pts, tracker.M)[0, 0] * tracker.scale_mm)
+        if robot_mm is not None and target_mm is not None:
+            # 🔴 РАСЧЕТ ОШИБКИ ИСКЛЮЧИТЕЛЬНО ПО ОСИ X В МИЛЛИМЕТРАХ
+            error_x = target_mm[0] - robot_mm[0]
+            dist_x = abs(error_x)
 
-            # Ошибка только по оси балки (X)
-            error = target_mm[0] - robot_mm[0]
-            dist = abs(error)
-
-            if dist < STOP_DIST:
-                try: ser.write(b"F 0\n")
-                except: pass
+            if dist_x < STOP_DIST_MM:
+                direction = "F"
+                speed = 0
             else:
-                speed = int(np.clip(KP * dist, 0, 255))
-                direction = "F" if error > 0 else "B"
+                speed = int(np.clip(KP * dist_x, 0, 100))
+                direction = "B" if error_x > 0 else "F"
 
-                # 🔍 Отладочный вывод
-                print(f"[CMD] {direction} {speed:3d} | Error: {error:+6.1f}mm | Dist: {dist:5.1f}mm")
+            # Троттлинг BT: Отправляем команду только если прошел интервал времени
+            # И ТОЛЬКО если параметры скорости или направления реально изменились
+            if (now - last_bt_send_time > BT_SEND_INTERVAL) or (direction != last_direction) or (abs(speed - last_speed) > 15):
+                try:
+                    ser.write(f"{direction} {speed}\n".encode())
+                    last_direction = direction
+                    last_speed = speed
+                    last_bt_send_time = now
+                    print(f"[CMD SENT] {direction} {speed:3d} | Err X: {error_x:+6.1f}mm")
+                except Exception as e:
+                    print(f"⚠️ Ошибка отправки: {e}")
 
-                try: ser.write(f"{direction} {speed}\n".encode())
-                except: pass
-
-        trajectory_scaled = [[int(p[0]*scale_x), int(p[1]*scale_y)] for p in trajectory]
-        debug_frame = tracker.draw_debug(frame, trajectory_scaled, scale_x, scale_y)
+        # Отрисовка графики (draw_debug принимает trajectory_px, внутри масштабирует под оригинальный frame)
+        debug_frame = tracker.draw_debug(frame, trajectory_px, scale_x, scale_y)
 
         cv2.imshow("Arkanoid Vision", debug_frame)
         if cv2.waitKey(1) & 0xFF == 27:
@@ -115,6 +122,7 @@ def main():
 
     cap.release()
     cv2.destroyAllWindows()
+    ser.close()
 
 if __name__ == "__main__":
     main()

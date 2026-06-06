@@ -14,9 +14,12 @@ uint chan1 = 0;
 uint chan2 = 0;
 uint servo1_slice = 0;
 uint servo2_slice = 0;
+uint counter = 0;
 
 void config(void);
 void callibrate_esc(void);
+void esc_drive(void);
+void esc_stop(void);
 
 int main(void){
     //IS_DEBUG = true;
@@ -27,7 +30,7 @@ int main(void){
 
     printf("RP2040 running!\n");
     callibrate_esc();
-    gpio_put(LED, 1);
+    //gpio_put(LED, 1);
 
     //cleanup uart buffer
     while(uart_is_readable(uart0)){
@@ -35,6 +38,17 @@ int main(void){
     }
 
     while(true){
+        if(button_clicked(BUTTON)){
+            if(counter == 1){
+                esc_drive();
+                gpio_put(LED, 1);
+                counter = 1;
+            }else{
+                esc_stop();
+                gpio_put(LED, 0);
+                counter = 0;
+            }
+        }
         get_uart_buf();
         if(is_cmd_ready){
             parse_uart_buf();
@@ -46,19 +60,43 @@ int main(void){
 }
 
 void callibrate_esc(void){
-    esc_set_speed(1000, SERVO1);
-    esc_set_speed(1000, SERVO2);
-    sleep_ms(1000);
-    esc_set_speed(2000, SERVO1);
-    esc_set_speed(2000, SERVO2);
-    sleep_ms(1000);
-    esc_set_speed(1200, SERVO1);
-    esc_set_speed(1200, SERVO2);
+    gpio_put(LED, 1);
     sleep_ms(500);
-    esc_set_speed(1000, SERVO1);
-    esc_set_speed(1000, SERVO2);
+    gpio_put(LED, 0);
+    sleep_ms(500);
+    gpio_put(LED, 1);
+    sleep_ms(500);
+    gpio_put(LED, 0);
+    sleep_ms(500);
+
+    esc_set_speed(MIN_PULSE, SERVO1);
+    esc_set_speed(MIN_PULSE, SERVO2);
+    sleep_ms(500);
+    esc_set_speed(MAX_PULSE, SERVO1);
+    esc_set_speed(MAX_PULSE, SERVO2);
+    sleep_ms(500);
+    esc_set_speed(1100, SERVO1);
+    esc_set_speed(1010, SERVO2);
+    sleep_ms(500);
+    esc_set_speed(MIN_PULSE, SERVO1);
+    esc_set_speed(MIN_PULSE, SERVO2);
+    gpio_put(LED, 1);
+    sleep_ms(500);
+    gpio_put(LED, 0);
+    sleep_ms(500);
     printf("Callibration pass\n");
 }
+
+void esc_drive(void){
+    esc_set_speed(ESC1_TARGET_PULSE, SERVO1);
+    esc_set_speed(ESC2_TARGET_PULSE, SERVO2);
+}
+
+void esc_stop(void){
+    esc_set_speed(MIN_PULSE, SERVO1);
+    esc_set_speed(MIN_PULSE, SERVO2);
+}
+
 void config(void){
     gpio_set_function(L, GPIO_FUNC_PWM);
     gpio_set_function(R, GPIO_FUNC_PWM);
@@ -93,7 +131,10 @@ void config(void){
     chan1 = pwm_gpio_to_channel(L);
     chan2 = pwm_gpio_to_channel(R);
 
-     pwm_set_chan_level(motor1_slice, chan1, 0);
-     pwm_set_chan_level(motor2_slice, chan2, 0);
+    pwm_set_chan_level(motor1_slice, chan1, 0);
+    pwm_set_chan_level(motor2_slice, chan2, 0);
 
+    gpio_init(BUTTON);
+    gpio_set_dir(BUTTON, GPIO_IN);
+    gpio_pull_up(BUTTON);
 }

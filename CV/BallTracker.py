@@ -16,18 +16,21 @@ class BallTracker:
         self.center_x = (self.wall_l_x + self.wall_r_x) / 2.0
         self.center_y = (np.min(self.wall_l_mm[:, 1]) + np.max(self.wall_r_mm[:, 1])) / 2.0
 
+        # Координата Y нашей балки в мм, где стоит робот (берем среднее по точкам балки)
+        self.beam_y_mm = np.mean(self.beam_mm[:, 1])
+
         self.curvature_k = 0.08
         self.friction = 0.006
-        self.restitution = 0.82
         self.dt = 0.016
-        self.max_sim_steps = 40
+        self.max_sim_steps = 60  # Немного увеличили, чтобы точно долетало до балки
 
         self.kf = cv2.KalmanFilter(4, 2)
         self.kf.measurementMatrix = np.array([[1,0,0,0],[0,1,0,0]], np.float32)
         self.kf.transitionMatrix = np.array([[1,0,self.dt,0],[0,1,0,self.dt],[0,0,1,0],[0,0,0,1]], np.float32)
 
-        self.kf.processNoiseCov = np.diag([0.1, 0.1, 20.0, 20.0]).astype(np.float32)
-        self.kf.measurementNoiseCov = np.eye(2, dtype=np.float32) * 0.25
+        # Снизили шум процесса (Process Noise), чтобы траектория была стабильнее и меньше дергалась
+        self.kf.processNoiseCov = np.diag([0.2, 0.2, 5.0, 5.0]).astype(np.float32)
+        self.kf.measurementNoiseCov = np.eye(2, dtype=np.float32) * 0.5
         self.kf_initialized = False
 
         self.color_lower = np.array([0, 120, 120])
@@ -48,21 +51,16 @@ class BallTracker:
     def _mm_to_px(self, pts_mm):
         pts_mm = np.array(pts_mm, dtype=np.float32).reshape(-1, 1, 2)
         pts_virt = pts_mm / self.scale_mm
-        return cv2.perspectiveTransform(pts_virt, self.M_inv).reshape(-1, 2).astype(int)
-
-    def _line_intersection(self, p1, p2, p3, p4):
-        x1, y1 = p1; x2, y2 = p2
-        x3, y3 = p3; x4, y4 = p4
-        denom = (y4 - y3) * (x2 - x1) - (x4 - x3) * (y2 - y1)
-        if abs(denom) < 1e-5: return None, float('inf')
-        ua = ((x4 - x3) * (y1 - y3) - (y4 - y3) * (x1 - x3)) / denom
-        ub = ((x2 - x1) * (y1 - y3) - (y2 - y1) * (x1 - x3)) / denom
-        if 0 <= ua <= 1 and 0 <= ub <= 1:
-            return np.array([x1 + ua*(x2-x1), y1 + ua*(y2-y1)]), ua
-        return None, float('inf')
+        return cv2.perspectiveTransform(pts_virt, self.M_inv).reshape(-1, 2)
 
     def get_prediction(self, frame):
-        if frame is None: return [0, 0], [[0, 0]]
+        """
+        Возвращает:
+        target_mm: [x, y] в мм (точка встречи на балке робота)
+        trajectory_px: список точек в пикселях для красивой отрисовки debug-линий
+        """
+        if frame is None:
+            return None, []
 
         hsv = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
         mask = cv2.inRange(hsv, self.color_lower, self.color_upper)
@@ -72,7 +70,7 @@ class BallTracker:
         if cnts:
             c = max(cnts, key=cv2.contourArea)
             ((x, y), r) = cv2.minEnclosingCircle(c)
-            if 3 < r < 50:  # Подстроено под 640x360
+            if 3 < r < 50:
                 detection_px = np.array([[x], [y]], dtype=np.float32)
 
         if detection_px is not None:
@@ -87,62 +85,88 @@ class BallTracker:
         vel_px = state[2:].flatten()
 
         self.history_px.append(curr_px.astype(int))
-        if len(self.history_px) > self.max_history: self.history_px.pop(0)
+        if len(self.history_px) > self.max_history:
+            self.history_px.pop(0)
 
-        if not self.kf_initialized: return curr_px.tolist(), [curr_px.tolist()]
-        if np.linalg.norm(vel_px) < 5.0: return curr_px.tolist(), [curr_px.tolist()]
+        # Переводим текущие px координаты и скорость фильтра Калмана в МИЛЛИМЕТРЫ
+        pos_mm = self._px_to_mm([curr_px])[0]
+        vel_mm = vel_px * self.scale_mm  # скорость из px/sec в мм/sec
 
-        pos_px = curr_px.copy()
-        vel_sim = vel_px.copy()
-        trajectory_px = [curr_px.tolist()]
+        if not self.kf_initialized or np.linalg.norm(vel_mm) < 10.0:
+            return pos_mm.tolist(), [curr_px.astype(int).tolist()]
+
+        # Симуляция физики ПОЛНОСТЬЮ в миллиметрах
+        trajectory_mm = [pos_mm.copy()]
+        target_mm = pos_mm.copy()
 
         for _ in range(self.max_sim_steps):
-            vel_sim *= (1.0 - self.friction)
+            prev_y = pos_mm[1]
 
-            # Радиальная кривизна (дом = отталкивает от центра по обеим осям)
+            # Применяем трение
+            vel_mm *= (1.0 - self.friction)
+
+            # Применяем радиальную кривизну стола
             if self.curvature_k != 0:
-                pos_mm = self._px_to_mm([pos_px])[0]
                 dx = pos_mm[0] - self.center_x
                 dy = pos_mm[1] - self.center_y
-                vel_sim[0] += (self.curvature_k * dx / self.scale_mm[0]) * self.dt
-                vel_sim[1] += (self.curvature_k * dy / self.scale_mm[1]) * self.dt
+                vel_mm[0] += (self.curvature_k * dx) * self.dt
+                vel_mm[1] += (self.curvature_k * dy) * self.dt
 
-            pos_px += vel_sim * self.dt
-            trajectory_px.append(pos_px.tolist())
+            # Шаг движения в мм
+            pos_mm += vel_mm * self.dt
+            trajectory_mm.append(pos_mm.copy())
 
-            check_mm = self._px_to_mm([pos_px])[0]
-            if check_mm[0] < self.wall_l_x or check_mm[0] > self.wall_r_x: break
-            if np.linalg.norm(vel_sim) < 2.0: break
+            # ПРОВЕРКА 1: Пересек ли мяч линию нашей балки по оси Y? (Точка встречи)
+            # Условие обрабатывает движение мяча как сверху вниз, так и снизу вверх к балке
+            if (prev_y <= self.beam_y_mm <= pos_mm[1]) or (prev_y >= self.beam_y_mm >= pos_mm[1]):
+                # Находим точный X в момент пересечения Y-линии балки через пропорцию
+                if abs(pos_mm[1] - prev_y) > 1e-3:
+                    pct = (self.beam_y_mm - prev_y) / (pos_mm[1] - prev_y)
+                    exact_x = trajectory_mm[-2][0] + pct * (pos_mm[0] - trajectory_mm[-2][0])
+                    target_mm = np.array([exact_x, self.beam_y_mm], dtype=np.float32)
+                else:
+                    target_mm = pos_mm.copy()
+                break
+            else:
+                target_mm = pos_mm.copy()
 
-        return trajectory_px[-1], trajectory_px
+            # ПРОВЕРКА 2: Вылет за боковые стены стола
+            if pos_mm[0] < self.wall_l_x or pos_mm[0] > self.wall_r_x:
+                break
 
-    def draw_debug(self, frame, trajectory, scale_x=1.0, scale_y=1.0):
-        def to_int_tuple(pt):
-            return tuple(int(round(c)) for c in pt)
+            # ПРОВЕРКА 3: Мяч остановился
+            if np.linalg.norm(vel_mm) < 5.0:
+                break
 
-        # Масштабируем внутренние координаты под оригинальный кадр
+        # Переводим массив траектории в пиксели ОДНИМ махом только для отрисовки графики
+        trajectory_px = self._mm_to_px(trajectory_mm).astype(int).tolist()
+
+        return target_mm.tolist(), trajectory_px
+
+    def draw_debug(self, frame, trajectory_px, scale_x=1.0, scale_y=1.0):
+        # Отрисовка детекта
         if self.last_detection_px is not None:
             x = int(self.last_detection_px[0] * scale_x)
             y = int(self.last_detection_px[1] * scale_y)
             cv2.circle(frame, (x, y), 12, (0, 255, 0), 2)
 
+        # Отрисовка истории хвоста
         for i in range(1, len(self.history_px)):
             p1 = (int(self.history_px[i-1][0]*scale_x), int(self.history_px[i-1][1]*scale_y))
             p2 = (int(self.history_px[i][0]*scale_x), int(self.history_px[i][1]*scale_y))
             cv2.line(frame, p1, p2, (0, 255, 0), 2)
 
-        if len(trajectory) > 1:
-            for i in range(1, len(trajectory)):
-                p1 = to_int_tuple(trajectory[i-1])
-                p2 = to_int_tuple(trajectory[i])
+        # Отрисовка предсказанной линии
+        if len(trajectory_px) > 1:
+            for i in range(1, len(trajectory_px)):
+                p1 = (int(trajectory_px[i-1][0]*scale_x), int(trajectory_px[i-1][1]*scale_y))
+                p2 = (int(trajectory_px[i][0]*scale_x), int(trajectory_px[i][1]*scale_y))
                 if (0 <= p1[0] < frame.shape[1] and 0 <= p1[1] < frame.shape[0] and
                     0 <= p2[0] < frame.shape[1] and 0 <= p2[1] < frame.shape[0]):
                     cv2.line(frame, p1, p2, (255, 0, 0), 2)
-            end_pt = to_int_tuple(trajectory[-1])
+
+            # Конечная точка симуляции (красный кружок)
+            end_pt = (int(trajectory_px[-1][0]*scale_x), int(trajectory_px[-1][1]*scale_y))
             if 0 <= end_pt[0] < frame.shape[1] and 0 <= end_pt[1] < frame.shape[0]:
                 cv2.circle(frame, end_pt, 6, (0, 0, 255), -1)
-        elif len(trajectory) == 1:
-            pt = to_int_tuple(trajectory[0])
-            if 0 <= pt[0] < frame.shape[1] and 0 <= pt[1] < frame.shape[0]:
-                cv2.circle(frame, pt, 6, (255, 0, 0), -1)
         return frame

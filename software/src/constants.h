@@ -12,6 +12,10 @@
 //servo init
 #define SERVO_WRAP 19999
 #define SERVO_DIVIDER 125.0f
+#define MAX_PULSE 2000
+#define ESC1_TARGET_PULSE 1200
+#define ESC2_TARGET_PULSE 1020
+#define MIN_PULSE 1000
 
 //pins
 #define UART_ID uart0
@@ -24,5 +28,6 @@
 #define L 10
 #define R 11
 #define BAT 26
+#define BUTTON 5
 
 #endif
