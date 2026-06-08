@@ -5,11 +5,14 @@ import numpy as np
 import serial
 from BallTracker import BallTracker
 from RobotTracker import RobotTracker
+from RobotController import RobotController
 from ColorCalibrate import ColorCalibrator
 from Polygon import PolygonMarker
 from Config import Config
 
 camID = 1
+Max_Vel = 255
+Max_Acc = 600
 
 def main():
     config = Config()
@@ -36,6 +39,8 @@ def main():
     physics = config.get_physics_params()
     tracker.curvature_k = physics.get("curvature_k", 0.08)
     tracker.friction = physics.get("friction", 0.006)
+
+    robot_ctrl = RobotController(max_vel=Max_Vel, max_acc=Max_Acc, dt=0.016)
 
     cap = cv2.VideoCapture(camID)
     if not cap.isOpened():
@@ -86,19 +91,28 @@ def main():
         tracker.set_dt(dt)
 
         # target_mm возвращается СРАЗУ В МИЛЛИМЕТРАХ
-        target_mm, trajectory_px = tracker.get_prediction(frame_small)
+        target_mm, trajectory_px = tracker.get_prediction(frame_small) # target point
         robot_mm = robot_tr.get_position(frame_small)
 
+        ball_predicted_x =target_mm[0]
+        current_robot_x, current_robot_vel = robot_ctrl.update_motion(ball_predicted_x)
+
         if robot_mm is not None and target_mm is not None:
-            # 🔴 РАСЧЕТ ОШИБКИ ИСКЛЮЧИТЕЛЬНО ПО ОСИ X В МИЛЛИМЕТРАХ
-            error_x = target_mm[0] - robot_mm[0]
+
+            robot_ctrl.current_pos = robot_mm[0]
+            ball_predicted_x = target_mm[0]
+            _, current_robot_vel = robot_ctrl.update_motion(ball_predicted_x)
+
+            error_x = ball_predicted_x - robot_mm[0]
             dist_x = abs(error_x)
 
             if dist_x < STOP_DIST_MM:
                 direction = "F"
                 speed = 0
             else:
-                speed = int(np.clip(KP * dist_x, 0, 100))
+                # 4. ВАЖНО: Вместо KP * dist_x мы берем готовую плавную скорость из трапеции!
+                # Округляем её до целого числа для отправки роботу
+                speed = int(np.clip(current_robot_vel, 0, Max_Vel))
                 direction = "B" if error_x > 0 else "F"
 
             # Троттлинг BT: Отправляем команду только если прошел интервал времени
