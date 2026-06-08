@@ -29,7 +29,7 @@ int main(void){
     sleep_ms(1000);
 
     printf("RP2040 running!\n");
-    //callibrate_esc();
+    callibrate_esc();
     //gpio_put(LED, 1);
 
     //cleanup uart buffer
@@ -63,13 +63,13 @@ int main(void){
 
 void callibrate_esc(void){
     gpio_put(LED, 1);
-    sleep_ms(500);
-    gpio_put(LED, 0);
-    sleep_ms(500);
-    gpio_put(LED, 1);
-    sleep_ms(500);
-    gpio_put(LED, 0);
-    sleep_ms(500);
+    // sleep_ms(500);
+    // gpio_put(LED, 0);
+    // sleep_ms(500);
+    // gpio_put(LED, 1);
+    // sleep_ms(500);
+    // gpio_put(LED, 0);
+    // sleep_ms(500);
 
     esc_set_speed(MIN_PULSE, SERVO1);
     esc_set_speed(MIN_PULSE, SERVO2);
@@ -82,10 +82,7 @@ void callibrate_esc(void){
     sleep_ms(500);
     esc_set_speed(MIN_PULSE, SERVO1);
     esc_set_speed(MIN_PULSE, SERVO2);
-    gpio_put(LED, 1);
-    sleep_ms(500);
     gpio_put(LED, 0);
-    sleep_ms(500);
     printf("Callibration pass\n");
 }
 

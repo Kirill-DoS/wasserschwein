@@ -10,7 +10,7 @@ from ColorCalibrate import ColorCalibrator
 from Polygon import PolygonMarker
 from Config import Config
 
-camID = 1
+camID = 0
 Max_Vel = 255
 Max_Acc = 600
 
@@ -76,67 +76,90 @@ def main():
     STOP_DIST_MM = 20.0     # Мертвая зона (в мм). Если погрешность меньше 2 см, робот не дергается
     KP = 1.3                # Коэффициент пропорциональности регулятора скорости
 
-    while True:
-        now = time.time()
-        dt = now - last_frame_time
-        last_frame_time = now
-        if dt > 0.1: dt = 0.033
+    try:
+        while True:
+            now = time.time()
+            dt = now - last_frame_time
+            last_frame_time = now
+            if dt > 0.1: dt = 0.033
 
-        ret, frame = cap.read()
-        if not ret: break
+            ret, frame = cap.read()
+            if not ret: break
 
-        frame_small = cv2.resize(frame, (640, 360))
-        scale_x, scale_y = frame.shape[1] / 640.0, frame.shape[0] / 360.0
+            frame_small = cv2.resize(frame, (640, 360))
+            scale_x, scale_y = frame.shape[1] / 640.0, frame.shape[0] / 360.0
 
-        tracker.set_dt(dt)
+            tracker.set_dt(dt)
 
-        # target_mm возвращается СРАЗУ В МИЛЛИМЕТРАХ
-        target_mm, trajectory_px = tracker.get_prediction(frame_small) # target point
-        robot_mm = robot_tr.get_position(frame_small)
+            # target_mm возвращается СРАЗУ В МИЛЛИМЕТРАХ
+            target_mm, trajectory_px = tracker.get_prediction(frame_small) # target point
+            robot_mm = robot_tr.get_position(frame_small)
 
-        ball_predicted_x =target_mm[0]
-        current_robot_x, current_robot_vel = robot_ctrl.update_motion(ball_predicted_x)
+            ball_predicted_x =target_mm[0]
+            current_robot_x, current_robot_vel = robot_ctrl.update_motion(ball_predicted_x)
 
-        if robot_mm is not None and target_mm is not None:
+            if robot_mm is not None and target_mm is not None:
 
-            robot_ctrl.current_pos = robot_mm[0]
-            ball_predicted_x = target_mm[0]
-            _, current_robot_vel = robot_ctrl.update_motion(ball_predicted_x)
+                robot_ctrl.current_pos = robot_mm[0]
+                ball_predicted_x = target_mm[0]
+                _, current_robot_vel = robot_ctrl.update_motion(ball_predicted_x)
 
-            error_x = ball_predicted_x - robot_mm[0]
-            dist_x = abs(error_x)
+                error_x = ball_predicted_x - robot_mm[0]
+                dist_x = abs(error_x)
 
-            if dist_x < STOP_DIST_MM:
-                direction = "F"
-                speed = 0
+                if dist_x < STOP_DIST_MM:
+                    direction = "F"
+                    speed = 0
+                else:
+                    # 4. ВАЖНО: Вместо KP * dist_x мы берем готовую плавную скорость из трапеции!
+                    # Округляем её до целого числа для отправки роботу
+                    speed = int(np.clip(current_robot_vel, 0, Max_Vel))
+                    direction = "B" if error_x > 0 else "F"
+
+                # Троттлинг BT: Отправляем команду только если прошел интервал времени
+                # И ТОЛЬКО если параметры скорости или направления реально изменились
+                if (now - last_bt_send_time > BT_SEND_INTERVAL) or (direction != last_direction) or (abs(speed - last_speed) > 15):
+                    try:
+                        ser.write(f"{direction} {speed}\n".encode())
+                        last_direction = direction
+                        last_speed = speed
+                        last_bt_send_time = now
+                        print(f"[CMD SENT] {direction} {speed:3d} | Err X: {error_x:+6.1f}mm")
+                    except Exception as e:
+                        print(f"⚠️ Ошибка отправки: {e}")
             else:
-                # 4. ВАЖНО: Вместо KP * dist_x мы берем готовую плавную скорость из трапеции!
-                # Округляем её до целого числа для отправки роботу
-                speed = int(np.clip(current_robot_vel, 0, Max_Vel))
-                direction = "B" if error_x > 0 else "F"
+                if last_speed != 0:
+                    try:
+                        ser.write(b"F 0\n") # или f"F 0\n".encode()
+                        last_speed = 0
+                        print("[INFO] Мяч потерян! Робот остановлен.")
+                    except Exception as e:
+                        pass
 
-            # Троттлинг BT: Отправляем команду только если прошел интервал времени
-            # И ТОЛЬКО если параметры скорости или направления реально изменились
-            if (now - last_bt_send_time > BT_SEND_INTERVAL) or (direction != last_direction) or (abs(speed - last_speed) > 15):
-                try:
-                    ser.write(f"{direction} {speed}\n".encode())
-                    last_direction = direction
-                    last_speed = speed
-                    last_bt_send_time = now
-                    print(f"[CMD SENT] {direction} {speed:3d} | Err X: {error_x:+6.1f}mm")
-                except Exception as e:
-                    print(f"⚠️ Ошибка отправки: {e}")
+            # Отрисовка графики (draw_debug принимает trajectory_px, внутри масштабирует под оригинальный frame)
+            debug_frame = tracker.draw_debug(frame, trajectory_px, scale_x, scale_y)
 
-        # Отрисовка графики (draw_debug принимает trajectory_px, внутри масштабирует под оригинальный frame)
-        debug_frame = tracker.draw_debug(frame, trajectory_px, scale_x, scale_y)
+            cv2.imshow("Arkanoid Vision", debug_frame)
+            if cv2.waitKey(1) & 0xFF == 27:
+                break
 
-        cv2.imshow("Arkanoid Vision", debug_frame)
-        if cv2.waitKey(1) & 0xFF == 27:
-            break
+    except KeyboardInterrupt:
+        print("\n🛑 Программа прервана пользователем (Ctrl+C)")
 
-    cap.release()
-    cv2.destroyAllWindows()
-    ser.close()
+    finally:
+        # Этот блок выполнится В ЛЮБОМ СЛУЧАЕ при выходе из try
+        print("🧹 Очистка ресурсов и остановка робота...")
+        try:
+            # Отправляем команду стоп. Убедись, что формат совпадает с прошивкой ("F 0\n")
+            ser.write(b"F 0\n")
+            time.sleep(0.1) # Даем времени Bluetooth-модулю физически отправить байты
+            ser.close()     # Закрываем порт
+            cap.release()
+            cv2.destroyAllWindows()
+            ser.close()
+            print("✅ Робот успешно остановлен, порт закрыт.")
+        except Exception as e:
+            print(f"⚠️ Не удалось отправить стоп при выходе: {e}")
 
 if __name__ == "__main__":
     main()
