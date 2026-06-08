@@ -39,16 +39,18 @@ int main(void){
 
     while(true){
         if(button_clicked(BUTTON)){
-            if(counter == 1){
+            // ИНВЕРТИРУЕМ состояние счетчика при каждом клике
+            if(counter == 0){
+                counter = 1;
                 esc_drive();
                 gpio_put(LED, 1);
-                counter = 1;
             }else{
+                counter = 0;
                 esc_stop();
                 gpio_put(LED, 0);
-                counter = 0;
             }
         }
+
         get_uart_buf();
         if(is_cmd_ready){
             parse_uart_buf();
@@ -61,13 +63,13 @@ int main(void){
 
 void callibrate_esc(void){
     gpio_put(LED, 1);
-    sleep_ms(500);
-    gpio_put(LED, 0);
-    sleep_ms(500);
-    gpio_put(LED, 1);
-    sleep_ms(500);
-    gpio_put(LED, 0);
-    sleep_ms(500);
+    // sleep_ms(500);
+    // gpio_put(LED, 0);
+    // sleep_ms(500);
+    // gpio_put(LED, 1);
+    // sleep_ms(500);
+    // gpio_put(LED, 0);
+    // sleep_ms(500);
 
     esc_set_speed(MIN_PULSE, SERVO1);
     esc_set_speed(MIN_PULSE, SERVO2);
@@ -80,19 +82,18 @@ void callibrate_esc(void){
     sleep_ms(500);
     esc_set_speed(MIN_PULSE, SERVO1);
     esc_set_speed(MIN_PULSE, SERVO2);
-    gpio_put(LED, 1);
-    sleep_ms(500);
     gpio_put(LED, 0);
-    sleep_ms(500);
     printf("Callibration pass\n");
 }
 
 void esc_drive(void){
+    gpio_put(LED, 1);
     esc_set_speed(ESC1_TARGET_PULSE, SERVO1);
     esc_set_speed(ESC2_TARGET_PULSE, SERVO2);
 }
 
 void esc_stop(void){
+    gpio_put(LED, 0);
     esc_set_speed(MIN_PULSE, SERVO1);
     esc_set_speed(MIN_PULSE, SERVO2);
 }

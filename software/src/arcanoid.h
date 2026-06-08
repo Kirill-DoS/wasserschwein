@@ -10,9 +10,7 @@ extern uint chan2;
 extern uint servo1_slice;
 extern uint servo2_slice;
 
-void motor_init();
 void drive(int pwm);
-
 //servo
 void servo_init(uint GPIO);
 void esc_set_speed(uint pulse_us, uint num);

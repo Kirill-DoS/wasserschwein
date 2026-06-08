@@ -8,6 +8,10 @@
 #define MOTOR_WRAP 255
 #define MOTOR_FREQ 5000  // 5 kHz
 #define MOTOR_DIVIDER (SYS_FREQ / (MOTOR_FREQ * (MOTOR_WRAP + 1)))  // = 48.0
+// for trapezoid acceleratoin
+#define a_max 1.5
+#define m_robot 700 // gramms
+#define MAX_VEL 255
 
 //servo init
 #define SERVO_WRAP 19999
