@@ -76,9 +76,9 @@ void callibrate_esc(void){
     sleep_ms(500);
     esc_set_speed(MAX_PULSE, SERVO1);
     esc_set_speed(MAX_PULSE, SERVO2);
-    sleep_ms(500);
-    esc_set_speed(1100, SERVO1);
-    esc_set_speed(1010, SERVO2);
+    //sleep_ms(500);
+    //esc_set_speed(ESC1_TARGET_PULSE, SERVO1);
+    //esc_set_speed(ESC2_TARGET_PULSE, SERVO2);
     sleep_ms(500);
     esc_set_speed(MIN_PULSE, SERVO1);
     esc_set_speed(MIN_PULSE, SERVO2);

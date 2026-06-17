@@ -14,11 +14,12 @@
 #define MAX_VEL 255
 
 //servo init
+//50 Hz
 #define SERVO_WRAP 19999
 #define SERVO_DIVIDER 125.0f
 #define MAX_PULSE 2000
-#define ESC1_TARGET_PULSE 1200
-#define ESC2_TARGET_PULSE 1020
+#define ESC1_TARGET_PULSE 1300
+#define ESC2_TARGET_PULSE 1200
 #define MIN_PULSE 1000
 
 //pins

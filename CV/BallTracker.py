@@ -14,21 +14,20 @@ class BallTracker:
         self.wall_l_x = np.min(self.wall_l_mm[:, 0])
         self.wall_r_x = np.max(self.wall_r_mm[:, 0])
         self.center_x = (self.wall_l_x + self.wall_r_x) / 2.0
-        self.center_y = (np.min(self.wall_l_mm[:, 1]) + np.max(self.wall_r_mm[:, 1])) / 2.0
+        self.center_y = (np.min(self.wall_l_mm[:, 1]) + np.max(self.wall_l_mm[:, 1])) / 2.0
 
-        # Координата Y нашей балки в мм, где стоит робот (берем среднее по точкам балки)
+        # Координата Y нашей балки в мм, где стоит робот
         self.beam_y_mm = np.mean(self.beam_mm[:, 1])
 
-        self.curvature_k = 0.08
+        self.curvature_k = 0.00
         self.friction = 0.006
         self.dt = 0.016
-        self.max_sim_steps = 60  # Немного увеличили, чтобы точно долетало до балки
+        self.max_sim_steps = 60
 
         self.kf = cv2.KalmanFilter(4, 2)
         self.kf.measurementMatrix = np.array([[1,0,0,0],[0,1,0,0]], np.float32)
         self.kf.transitionMatrix = np.array([[1,0,self.dt,0],[0,1,0,self.dt],[0,0,1,0],[0,0,0,1]], np.float32)
 
-        # Снизили шум процесса (Process Noise), чтобы траектория была стабильнее и меньше дергалась
         self.kf.processNoiseCov = np.diag([0.2, 0.2, 5.0, 5.0]).astype(np.float32)
         self.kf.measurementNoiseCov = np.eye(2, dtype=np.float32) * 0.5
         self.kf_initialized = False
@@ -38,6 +37,10 @@ class BallTracker:
         self.history_px = []
         self.max_history = 10
         self.last_detection_px = None
+
+        # ДОБАВЛЕНО: Счетчик кадров без детекта мяча
+        self.frames_without_detection = 0
+        self.max_lost_frames = 15  # ~0.5 секунды при 30 FPS
 
     def set_dt(self, dt):
         self.dt = max(0.005, min(0.05, dt))
@@ -57,10 +60,11 @@ class BallTracker:
         """
         Возвращает:
         target_mm: [x, y] в мм (точка встречи на балке робота)
-        trajectory_px: список точек в пикселях для красивой отрисовки debug-линий
+        trajectory_px: список точек в пикселях для отрисовки
+        is_lost_long_time: True если мяч потерян давно (> 0.5 сек)
         """
         if frame is None:
-            return None, []
+            return None, [], True
 
         hsv = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
         mask = cv2.inRange(hsv, self.color_lower, self.color_upper)
@@ -72,6 +76,9 @@ class BallTracker:
             ((x, y), r) = cv2.minEnclosingCircle(c)
             if 3 < r < 50:
                 detection_px = np.array([[x], [y]], dtype=np.float32)
+                self.frames_without_detection = 0  # Сбрасываем счетчик
+        else:
+            self.frames_without_detection += 1  # Увеличиваем счетчик
 
         if detection_px is not None:
             if not self.kf_initialized:
@@ -88,12 +95,13 @@ class BallTracker:
         if len(self.history_px) > self.max_history:
             self.history_px.pop(0)
 
-        # Переводим текущие px координаты и скорость фильтра Калмана в МИЛЛИМЕТРЫ
+        # Переводим текущие px координаты и скорость в МИЛЛИМЕТРЫ
         pos_mm = self._px_to_mm([curr_px])[0]
-        vel_mm = vel_px * self.scale_mm  # скорость из px/sec в мм/sec
+        vel_mm = vel_px * self.scale_mm
 
         if not self.kf_initialized or np.linalg.norm(vel_mm) < 10.0:
-            return pos_mm.tolist(), [curr_px.astype(int).tolist()]
+            is_lost_long_time = self.frames_without_detection > self.max_lost_frames
+            return pos_mm.tolist(), [curr_px.astype(int).tolist()], is_lost_long_time
 
         # Симуляция физики ПОЛНОСТЬЮ в миллиметрах
         trajectory_mm = [pos_mm.copy()]
@@ -116,10 +124,8 @@ class BallTracker:
             pos_mm += vel_mm * self.dt
             trajectory_mm.append(pos_mm.copy())
 
-            # ПРОВЕРКА 1: Пересек ли мяч линию нашей балки по оси Y? (Точка встречи)
-            # Условие обрабатывает движение мяча как сверху вниз, так и снизу вверх к балке
+            # ПРОВЕРКА 1: Пересек ли мяч линию нашей балки по оси Y?
             if (prev_y <= self.beam_y_mm <= pos_mm[1]) or (prev_y >= self.beam_y_mm >= pos_mm[1]):
-                # Находим точный X в момент пересечения Y-линии балки через пропорцию
                 if abs(pos_mm[1] - prev_y) > 1e-3:
                     pct = (self.beam_y_mm - prev_y) / (pos_mm[1] - prev_y)
                     exact_x = trajectory_mm[-2][0] + pct * (pos_mm[0] - trajectory_mm[-2][0])
@@ -138,10 +144,13 @@ class BallTracker:
             if np.linalg.norm(vel_mm) < 5.0:
                 break
 
-        # Переводим массив траектории в пиксели ОДНИМ махом только для отрисовки графики
+        # Переводим массив траектории в пиксели для отрисовки
         trajectory_px = self._mm_to_px(trajectory_mm).astype(int).tolist()
 
-        return target_mm.tolist(), trajectory_px
+        # ДОБАВЛЕНО: Возвращаем флаг долгой потери
+        is_lost_long_time = self.frames_without_detection > self.max_lost_frames
+
+        return target_mm.tolist(), trajectory_px, is_lost_long_time
 
     def draw_debug(self, frame, trajectory_px, scale_x=1.0, scale_y=1.0):
         # Отрисовка детекта
