@@ -19,7 +19,7 @@ class BallTracker:
         # Координата Y нашей балки в мм, где стоит робот
         self.beam_y_mm = np.mean(self.beam_mm[:, 1])
 
-        self.curvature_k = 0.00
+        self.curvature_k = 0.08
         self.friction = 0.006
         self.dt = 0.016
         self.max_sim_steps = 60

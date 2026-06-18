@@ -37,7 +37,7 @@ def main():
     tracker.color_upper = color_upper
 
     physics = config.get_physics_params()
-    tracker.curvature_k = physics.get("curvature_k", 0.00)
+    tracker.curvature_k = physics.get("curvature_k", 0.08)
     tracker.friction = physics.get("friction", 0.006)
 
     robot_ctrl = RobotController(max_vel=Max_Vel, max_acc=Max_Acc, dt=0.016)
