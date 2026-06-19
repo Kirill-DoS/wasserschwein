@@ -26,10 +26,12 @@ int main(void){
 
     stdio_init_all();
     config();
-    sleep_ms(1000);
+    esc_set_speed(MIN_PULSE, SERVO1);
+    esc_set_speed(MIN_PULSE, SERVO2);
+    sleep_ms(3000);
 
     printf("RP2040 running!\n");
-    callibrate_esc();
+    //callibrate_esc();
     //gpio_put(LED, 1);
 
     //cleanup uart buffer
@@ -89,7 +91,7 @@ void callibrate_esc(void){
 void esc_drive(void){
     gpio_put(LED, 1);
     esc_set_speed(ESC1_TARGET_PULSE, SERVO1);
-    esc_set_speed(ESC2_TARGET_PULSE, SERVO2);
+    esc_set_speed(ESC1_TARGET_PULSE, SERVO2);
 }
 
 void esc_stop(void){
