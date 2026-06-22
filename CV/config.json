@@ -5,12 +5,12 @@
     112
   ],
   "color_upper": [
-    94,
+    15,
     255,
     255
   ],
   "physics": {
-    "curvature_k": 1.2,
+    "curvature_k": 0.05,
     "friction": 0.015,
     "restitution": 0.82
   },

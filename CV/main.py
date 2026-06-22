@@ -12,11 +12,13 @@ from Config import Config
 
 camID = 1
 Max_Vel = 255
-Max_Acc = 600
+Max_Acc = 1000
+MIN_MOTOR_PWM = 35  # ✅ НОВОЕ: минимальная скорость для старта моторов
 
 def main():
     config = Config()
     required_files = ['perimeter.npy', 'left_wall.npy', 'right_wall.npy', 'robot_beam.npy']
+
     if not all(os.path.exists(f) for f in required_files):
         print("📐 Файлы геометрии не найдены. Запуск разметки...")
         PolygonMarker(camID).run()
@@ -56,7 +58,8 @@ def main():
 
     last_frame_time = time.time()
     last_bt_send_time = 0
-    BT_SEND_INTERVAL = 0.04  # Отправляем команды не чаще чем раз в 40 мс
+
+    BT_SEND_INTERVAL = 0.04
 
     last_direction = ""
     last_speed = -1
@@ -72,9 +75,14 @@ def main():
         print(f"❌ Ошибка BT: {e}")
         return
 
-    robot_tr = RobotTracker([100, 80, 80], [140, 255, 255], tracker.M, tracker.scale_mm)
+    robot_tr = RobotTracker(
+        [100, 80, 80], [140, 255, 255],
+        tracker.M, tracker.scale_mm,
+        filter_len=3   # ← было по умолчанию 5
+    )
 
     STOP_DIST_MM = 10.0  # Мертвая зона (в мм)
+
 
     try:
         while True:
@@ -93,63 +101,96 @@ def main():
 
             tracker.set_dt(dt)
 
-            # Теперь получаем 3 значения, включая флаг долгой потери
             target_mm, trajectory_px, is_lost_long_time = tracker.get_prediction(frame_small)
-            robot_mm = robot_tr.get_position(frame_small)
+            robot_mm, robot_px = robot_tr.get_position(frame_small)
 
             if robot_mm is not None and target_mm is not None:
-                robot_ctrl.current_pos = robot_mm[0]
+                # Передаём реальный dt в контроллер
+                robot_ctrl.set_dt(dt)
 
-                # 🔴 ГЛАВНОЕ ИСПРАВЛЕНИЕ: Проверяем флаг долгой потери
-                if is_lost_long_time:
-                    # Мяч потерян давно - останавливаемся и сбрасываем скорость
-                    if last_speed != 0:
-                        try:
-                            ser.write(b"F 0\n")
-                            last_speed = 0
-                            last_direction = "F"
-                            robot_ctrl.current_vel = 0.0  # Сброс инерции контроллера
-                            print(f"[INFO] Мяч потерян давно! Стоп. Lost: {is_lost_long_time}")
-                        except Exception as e:
-                            print(f"⚠️ Ошибка отправки: {e}")
+                # Мягкая синхронизация
+                robot_ctrl.sync_position(robot_mm[0], alpha=0.3)
+
+                # ✅ НОВОЕ: получаем скорость мяча из трекера
+                ball_vel_x = tracker.get_ball_velocity_x()  # скорость мяча в мм/с
+
+                # ✅ НОВОЕ: корректируем цель с учётом направления скорости
+                target_x = target_mm[0]
+
+                # Если мяч летит вправо (vel > 0), а робот слева от мяча — цель должна быть справа
+                if ball_vel_x > 50 and robot_mm[0] < target_x:
+                    # Мяч летит вправо, робот слева — всё ок, цель вправо
+                    pass
+                elif ball_vel_x > 50 and robot_mm[0] > target_x:
+                    # Мяч летит вправо, но робот справа от предсказанной точки
+                    # Это значит, симуляция недооценила дальность полёта
+                    # Сдвигаем цель вправо от робота
+                    target_x = robot_mm[0] + abs(ball_vel_x) * 0.3  # экстраполяция на 0.3 сек
+
+                # Если мяч летит влево (vel < 0), а робот справа от мяча — цель должна быть слева
+                elif ball_vel_x < -50 and robot_mm[0] > target_x:
+                    pass
+                elif ball_vel_x < -50 and robot_mm[0] < target_x:
+                    target_x = robot_mm[0] - abs(ball_vel_x) * 0.3
+
+                # Расчёт скорости с корректированной целью
+                _, current_robot_vel = robot_ctrl.update_motion(target_x)
+
+                error_x = target_x - robot_mm[0]
+                dist_x = abs(error_x)
+
+                if dist_x < STOP_DIST_MM:
+                    direction = "F"
+                    speed = 0
+                    robot_ctrl.current_vel = 0.0
                 else:
-                    # Мяч виден (или потерян недавно) - едем к предсказанной точке
-                    ball_predicted_x = target_mm[0]
-                    _, current_robot_vel = robot_ctrl.update_motion(ball_predicted_x)
+                    speed = int(np.clip(current_robot_vel, 0, Max_Vel))
+                    if speed > 0 and speed < MIN_MOTOR_PWM:
+                        speed = MIN_MOTOR_PWM
+                    direction = "B" if error_x > 0 else "F"
 
-                    error_x = ball_predicted_x - robot_mm[0]
-                    dist_x = abs(error_x)
-
-                    if dist_x < STOP_DIST_MM:
-                        direction = "F"
-                        speed = 0
-                    else:
-                        speed = int(np.clip(abs(current_robot_vel), 0, Max_Vel))
-                        direction = "F" if current_robot_vel > 0 else "B"
-
-                    # Троттлинг BT
-                    if (now - last_bt_send_time > BT_SEND_INTERVAL) or (direction != last_direction) or (abs(speed - last_speed) > 15):
-                        try:
-                            ser.write(f"{direction} {speed}\n".encode())
-                            last_direction = direction
-                            last_speed = speed
-                            last_bt_send_time = now
-                            print(f"[CMD SENT] {direction} {speed:3d} | Err X: {error_x:+6.1f}mm | Lost: {is_lost_long_time}")
-                        except Exception as e:
-                            print(f"⚠️ Ошибка отправки: {e}")
+                # Троттлинг BT
+                if (now - last_bt_send_time > BT_SEND_INTERVAL) or \
+                (direction != last_direction) or \
+                (abs(speed - last_speed) > 15):
+                    try:
+                        ser.write(f"{direction} {speed}\n".encode())
+                        last_direction = direction
+                        last_speed = speed
+                        last_bt_send_time = now
+                        print(f"[CMD] {direction} {speed:3d} | Err: {error_x:+6.1f}mm | "
+                            f"Vel: {current_robot_vel:+6.1f}mm/s | BallVel: {ball_vel_x:+6.1f}mm/s")
+                    except Exception as e:
+                        print(f"⚠️ Ошибка отправки: {e}")
             else:
                 # Робот потерян из виду - экстренная остановка
                 if last_speed != 0:
                     try:
                         ser.write(b"F 0\n")
                         last_speed = 0
-                        robot_ctrl.current_vel = 0.0
-                        print("[INFO] Робот потерян! Остановка.")
+                        print("[INFO] Мяч или робот потерян! Робот остановлен.")
                     except Exception as e:
                         pass
 
-            # Отрисовка графики
+            # Отрисовка
             debug_frame = tracker.draw_debug(frame, trajectory_px, scale_x, scale_y)
+
+            # Отрисовка робота зелёным квадратом
+            if robot_px is not None:
+                x_px, y_px, r_px = robot_px
+                x_orig = int(x_px * scale_x)
+                y_orig = int(y_px * scale_y)
+                r_orig = int(r_px * max(scale_x, scale_y))
+
+                cv2.rectangle(debug_frame,
+                            (x_orig - r_orig, y_orig - r_orig),
+                            (x_orig + r_orig, y_orig + r_orig),
+                            (0, 255, 0), 2)
+
+                if robot_mm is not None:
+                    cv2.putText(debug_frame, f"Robot: {robot_mm[0]:.0f}mm",
+                              (x_orig - r_orig, y_orig - r_orig - 10),
+                              cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
 
             cv2.imshow("Arkanoid Vision", debug_frame)
             if cv2.waitKey(1) & 0xFF == 27:

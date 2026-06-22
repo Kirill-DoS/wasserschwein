@@ -22,13 +22,15 @@ class BallTracker:
         self.curvature_k = 0.08
         self.friction = 0.006
         self.dt = 0.016
-        self.max_sim_steps = 60
+
+        self.max_sim_steps = 100  # Немного увеличили, чтобы точно долетало до балки
 
         self.kf = cv2.KalmanFilter(4, 2)
         self.kf.measurementMatrix = np.array([[1,0,0,0],[0,1,0,0]], np.float32)
         self.kf.transitionMatrix = np.array([[1,0,self.dt,0],[0,1,0,self.dt],[0,0,1,0],[0,0,0,1]], np.float32)
 
-        self.kf.processNoiseCov = np.diag([0.2, 0.2, 5.0, 5.0]).astype(np.float32)
+        # Снизили шум процесса (Process Noise), чтобы траектория была стабильнее и меньше дергалась
+        self.kf.processNoiseCov = np.diag([0.5, 0.5, 15.0, 15.0]).astype(np.float32)
         self.kf.measurementNoiseCov = np.eye(2, dtype=np.float32) * 0.5
         self.kf_initialized = False
 
@@ -137,9 +139,15 @@ class BallTracker:
                 target_mm = pos_mm.copy()
 
             # ПРОВЕРКА 2: Вылет за боковые стены стола
-            if pos_mm[0] < self.wall_l_x or pos_mm[0] > self.wall_r_x:
-                break
+            if pos_mm[0] < self.wall_l_x:
+                pos_mm[0] = 2 * self.wall_l_x - pos_mm[0]   # зеркальное отражение
+                vel_mm[0] = -vel_mm[0] * 0.85                # отскок с потерей 15% энергии
+                continue  # продолжаем симуляцию, а не break!
 
+            if pos_mm[0] > self.wall_r_x:
+                pos_mm[0] = 2 * self.wall_r_x - pos_mm[0]
+                vel_mm[0] = -vel_mm[0] * 0.85
+                continue
             # ПРОВЕРКА 3: Мяч остановился
             if np.linalg.norm(vel_mm) < 5.0:
                 break
@@ -179,3 +187,13 @@ class BallTracker:
             if 0 <= end_pt[0] < frame.shape[1] and 0 <= end_pt[1] < frame.shape[0]:
                 cv2.circle(frame, end_pt, 6, (0, 0, 255), -1)
         return frame
+
+    def get_ball_velocity_x(self):
+        """Возвращает текущую скорость мяча по X в мм/с"""
+        if not self.kf_initialized:
+            return 0.0
+
+        state = self.kf.predict()
+        vel_px = state[2:].flatten()
+        vel_mm = vel_px * self.scale_mm
+        return vel_mm[0]  # скорость по X в мм/с
