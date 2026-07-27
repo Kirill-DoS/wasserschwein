@@ -9,6 +9,7 @@
 #define UART_RX_PIN 1
 
 
+// Включает, выключает или кратко мигает светодиодом в старом тестовом примере.
 void on_off_LED(const int NUM_LED, const int del, const int status){
     
     int state = status;
@@ -32,6 +33,7 @@ void on_off_LED(const int NUM_LED, const int del, const int status){
 
 }
 
+// Обрабатывает один символ Bluetooth в старом тестовом примере.
 void read_bluetooth(char c){
     
     if(c == 'O'){
@@ -45,6 +47,7 @@ void read_bluetooth(char c){
     }
 }
 
+// Запускает устаревший тест UART и светодиода; в основную прошивку не входит.
 int main() {
     stdio_init_all();
     sleep_ms(2000);

@@ -20,6 +20,10 @@
 #define ESC1_TARGET_PULSE 1200
 #define ESC2_TARGET_PULSE 1020
 #define MIN_PULSE 1000
+#define CALIBRATE_ESC_ON_BOOT 0
+
+// Защита от зависания компьютера или обрыва Bluetooth: мотор тормозит без новой команды.
+#define COMMAND_TIMEOUT_MS 400
 
 //pins
 #define UART_ID uart0

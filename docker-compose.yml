@@ -20,8 +20,6 @@ services:
       - ./output:/app/output
       # Для сохранения весов модели
       - ./models:/root/.cache/torch/hub/checkpoints
-    ports:
-      - "7860:7860"  # Если используется Gradio/FastAPI
     stdin_open: true
     tty: true
     # Для увеличения доступной памяти (опционально)

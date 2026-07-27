@@ -1,109 +1,77 @@
-from ultralytics import YOLO
+import argparse
 import os
 import shutil
+from pathlib import Path
+
+import torch
 import yaml
+from ultralytics import YOLO
 
-def prepare_dataset(images_folder, output_folder='ball_dataset'):
-    """
-    Подготавливает структуру для обучения
-    """
-    # Создаем структуру папок
-    folders = ['images/train', 'images/val', 'labels/train', 'labels/val']
-    for folder in folders:
-        os.makedirs(os.path.join(output_folder, folder), exist_ok=True)
-    
-    # Создаем файл конфигурации dataset.yaml
+
+# Создаёт структуру датасета с одним классом ball и при желании копирует исходные изображения в train.
+def prepare_dataset(images_folder=None, output_folder="ball_dataset"):
+    output_path = Path(output_folder).resolve()
+    for folder in ("images/train", "images/val", "labels/train", "labels/val"):
+        (output_path / folder).mkdir(parents=True, exist_ok=True)
+
+    if images_folder:
+        source_path = Path(images_folder)
+        if not source_path.exists():
+            raise FileNotFoundError(f"Папка с изображениями не найдена: {source_path}")
+        for image_path in source_path.iterdir():
+            if image_path.suffix.lower() in {".jpg", ".jpeg", ".png"}:
+                shutil.copy2(image_path, output_path / "images/train" / image_path.name)
+
     dataset_config = {
-        'path': os.path.abspath(output_folder),
-        'train': 'images/train',
-        'val': 'images/val',
-        'nc': 81,  # 80 COCO классов + наш мяч
-        'names': [
-            'person', 'bicycle', 'car', 'motorcycle', 'airplane', 'bus', 'train', 'truck', 
-            'boat', 'traffic light', 'fire hydrant', 'stop sign', 'parking meter', 'bench', 
-            'bird', 'cat', 'dog', 'horse', 'sheep', 'cow', 'elephant', 'bear', 'zebra', 
-            'giraffe', 'backpack', 'umbrella', 'handbag', 'tie', 'suitcase', 'frisbee', 
-            'skis', 'snowboard', 'sports ball', 'kite', 'baseball bat', 'baseball glove', 
-            'skateboard', 'surfboard', 'tennis racket', 'bottle', 'wine glass', 'cup', 
-            'fork', 'knife', 'spoon', 'bowl', 'banana', 'apple', 'sandwich', 'orange', 
-            'broccoli', 'carrot', 'hot dog', 'pizza', 'donut', 'cake', 'chair', 'couch', 
-            'potted plant', 'bed', 'dining table', 'toilet', 'tv', 'laptop', 'mouse', 
-            'remote', 'keyboard', 'cell phone', 'microwave', 'oven', 'toaster', 'sink', 
-            'refrigerator', 'book', 'clock', 'vase', 'scissors', 'teddy bear', 'hair drier', 
-            'toothbrush',
-            'fitness_ball'  # Наш 81-й класс
-        ]
+        "path": str(output_path),
+        "train": "images/train",
+        "val": "images/val",
+        "nc": 1,
+        "names": ["ball"],
     }
-    
-    with open(os.path.join(output_folder, 'dataset.yaml'), 'w') as f:
-        yaml.dump(dataset_config, f)
-    
-    print(f"✅ Структура датасета создана в {output_folder}")
-    print(f"📁 Поместите изображения в {output_folder}/images/train/")
-    print(f"📁 Поместите разметку в {output_folder}/labels/train/")
-    
-    return os.path.join(output_folder, 'dataset.yaml')
+    dataset_path = output_path / "dataset.yaml"
+    with dataset_path.open("w", encoding="utf-8") as dataset_file:
+        yaml.safe_dump(dataset_config, dataset_file, allow_unicode=True, sort_keys=False)
+    return dataset_path
 
+
+# Запускает дообучение YOLO только после того, как оператор подготовил train и val разметку.
 def train_model(data_yaml, epochs=50, imgsz=640):
-    """
-    Дообучает модель на новом классе
-    """
-    print("🚀 Начинаю дообучение модели...")
-    
-    # Загружаем предобученную модель
-    model = YOLO('yolo11n.pt')
-    
-    # Дообучаем модель
-    results = model.train(
-        data=data_yaml,           # Конфиг датасета
-        epochs=epochs,            # Количество эпох
-        imgsz=imgsz,             # Размер изображения
-        batch=16,                # Размер батча
-        name='fitness_ball_v8',  # Имя эксперимента
-        pretrained=True,         # Используем предобученные веса
-        freeze=10,               # Замораживаем первые 10 слоев
-        lr0=0.01,                # Начальная скорость обучения
-        lrf=0.01,                # Финальная скорость обучения
-        momentum=0.937,          # Момент
-        weight_decay=0.0005,     # Вес декай
-        warmup_epochs=3,         # Разогрев
-        warmup_momentum=0.8,     # Момент разогрева
-        box=7.5,                 # Вес loss для боксов
-        cls=0.5,                 # Вес loss для классификации
-        dfl=1.5,                 # Вес loss для DFL
-        patience=50,             # Ранняя остановка
-        device='cuda' if torch.cuda.is_available() else 'cpu',  # Используем GPU если есть
-        workers=8,               # Количество воркеров
-        amp=True,                # Используем автоматическую смешанную точность
-        resume=False,            # Продолжить с чекпоинта
-        seed=42,                 # Сид для воспроизводимости
-        deterministic=True,      # Детерминированность
-        verbose=True             # Вывод подробной информации
+    model = YOLO("yolo11n.pt")
+    device = "cuda" if torch.cuda.is_available() else "cpu"
+    return model.train(
+        data=str(data_yaml),
+        epochs=epochs,
+        imgsz=imgsz,
+        batch=16,
+        name="ball_detector",
+        pretrained=True,
+        freeze=10,
+        patience=50,
+        device=device,
+        workers=8,
+        amp=torch.cuda.is_available(),
+        seed=42,
+        deterministic=True,
     )
-    
-    return results
+
+
+# Показывает безопасный интерфейс подготовки или явного запуска экспериментального обучения YOLO.
+def main():
+    parser = argparse.ArgumentParser(description="Подготовка и обучение отдельного детектора мяча")
+    parser.add_argument("--output", default="ball_dataset")
+    parser.add_argument("--images", help="Папка исходных изображений для train")
+    parser.add_argument("--train", action="store_true", help="Явно запустить обучение")
+    parser.add_argument("--epochs", default=50, type=int)
+    args = parser.parse_args()
+
+    dataset_path = prepare_dataset(args.images, args.output)
+    print(f"✅ Структура датасета: {dataset_path}")
+    if not args.train:
+        print("Добавьте пары изображение/разметка в train и val, затем запустите с --train.")
+        return
+    train_model(dataset_path, epochs=args.epochs)
+
 
 if __name__ == "__main__":
-    import torch
-    
-    print("="*60)
-    print("ДООБУЧЕНИЕ YOLOv8 ДЛЯ ФИТНЕС-МЯЧА")
-    print("="*60)
-    
-    # Проверяем GPU
-    if torch.cuda.is_available():
-        print(f"✅ GPU доступна: {torch.cuda.get_device_name(0)}")
-    else:
-        print("⚠️ GPU не найдена, обучение будет на CPU (медленно)")
-    
-    # Создаем структуру датасета
-    data_yaml = prepare_dataset('your_images_folder')
-    
-    # Начинаем обучение
-    print("\n📚 Для начала обучения:")
-    print("1. Поместите ваши фото в папку fitness_ball_dataset/images/train/")
-    print("2. Создайте файлы разметки в   fitness_ball_dataset/labels/train/")
-    print("3. Запустите этот скрипт снова")
-    
-    # Если данные готовы, раскомментируйте следующую строку:
-    train_model(data_yaml, epochs=50)
+    main()

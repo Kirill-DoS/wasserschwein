@@ -3,6 +3,7 @@
 
 #include <iostream>
 
+// Разбирает старый C++-формат команды устройства; основной UART-парсер его не использует.
 void parse(std::string expr){
     std::string dev = "";
     std::string num = "";

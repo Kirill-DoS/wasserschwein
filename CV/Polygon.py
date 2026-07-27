@@ -1,13 +1,17 @@
+import json
+import os
+import platform
+from pathlib import Path
+
 import cv2
 import numpy as np
-import os
-
-# for OS
-import platform
 
 class PolygonMarker:
-    def __init__(self, CamID):
-        self.camera_id = CamID
+    # Открывает камеру и готовит интерактивную разметку поля в заданной папке.
+    def __init__(self, camera_id, frame_size=(1280, 720), output_dir="."):
+        self.camera_id = camera_id
+        self.frame_size = tuple(frame_size)
+        self.output_dir = Path(output_dir)
         self.cap = None
         self.points = []
         self.frame = None
@@ -21,9 +25,10 @@ class PolygonMarker:
         cv2.namedWindow("Marking Tool", cv2.WINDOW_NORMAL)
         cv2.setMouseCallback("Marking Tool", self._mouse_callback)
 
+    # Настраивает камеру в том же разрешении, которое затем будет использовать управление.
     def _init_camera(self):
         """Инициализация камеры"""
-        if platform.system() == "Window":
+        if platform.system() == "Windows":
             backend = cv2.CAP_DSHOW
         else:
             backend = cv2.CAP_ANY
@@ -34,8 +39,8 @@ class PolygonMarker:
             return False
 
         # Устанавливаем разрешение (опционально)
-        self.cap.set(cv2.CAP_PROP_FRAME_WIDTH, 1280)
-        self.cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 720)
+        self.cap.set(cv2.CAP_PROP_FRAME_WIDTH, self.frame_size[0])
+        self.cap.set(cv2.CAP_PROP_FRAME_HEIGHT, self.frame_size[1])
 
         # Получаем первый кадр
         ret, frame = self.cap.read()
@@ -47,6 +52,7 @@ class PolygonMarker:
             print("ОШИБКА: Не удалось получить кадр с камеры")
             return False
 
+    # Добавляет точку разметки по клику мыши и обновляет окно предпросмотра.
     def _mouse_callback(self, event, x, y, flags, param):
         if event == cv2.EVENT_LBUTTONDOWN:
             self.points.append((x, y))
@@ -75,6 +81,7 @@ class PolygonMarker:
             cv2.imshow("Marking Tool", self.temp_frame)
             print(f"  Точка {len(self.points)}: ({x}, {y})")
 
+    # Строит преобразование перспективы из кадра камеры в прямоугольник виртуального поля.
     def _calculate_homography(self, src_points):
         """Рассчитывает матрицу гомографии из исходных точек в целевые"""
         if len(src_points) != 4:
@@ -98,6 +105,7 @@ class PolygonMarker:
         H, _ = cv2.findHomography(src, dst, cv2.RANSAC, 5.0)
         return H
 
+    # Собирает кликами одну геометрическую сущность поля и сохраняет её в папку калибровки.
     def mark_zone(self, label, count, filename, calculate_homography=False):
         """Разметка зоны"""
         print(f"\n{'='*50}")
@@ -168,22 +176,25 @@ class PolygonMarker:
         if calculate_homography and count == 4:
             H = self._calculate_homography(data)
             if H is not None:
-                np.save(filename, H)
-                print(f"✓ Гомографическая матрица сохранена в {filename}")
+                output_path = self.output_dir / filename
+                np.save(output_path, H)
+                print(f"✓ Гомографическая матрица сохранена в {output_path}")
                 print(f"  Размер матрицы: {H.shape}")
                 print(f"  Матрица:\n{H}")
             else:
                 print(f"✗ Не удалось рассчитать гомографию для {label}")
                 return False
         else:
-            np.save(filename, data)
-            print(f"✓ Точки сохранены в {filename}")
+            output_path = self.output_dir / filename
+            np.save(output_path, data)
+            print(f"✓ Точки сохранены в {output_path}")
             print(f"  Координаты точек:\n{data}")
 
         # Фиксация разметки (рисуем синим на финальном кадре)
         self._draw_final_zone(data)
         return True
 
+    # Рисует завершённую разметку на общем кадре для визуальной проверки оператором.
     def _draw_final_zone(self, data):
         """Отрисовка финальной разметки на кадре"""
         if len(data) == 2:
@@ -198,6 +209,7 @@ class PolygonMarker:
                 cv2.putText(self.frame, str(i+1), (point[0]+5, point[1]-5),
                            cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 0, 0), 2)
 
+    # Последовательно размечает периметр, стены и рейку, затем фиксирует размер калибровочного кадра.
     def run(self):
         """Запуск процесса разметки"""
         if self.cap is None or not self.cap.isOpened():
@@ -215,10 +227,15 @@ class PolygonMarker:
         print(" НАЧАЛО РАЗМЕТКИ С КАМЕРЫ")
         print("="*50)
 
+        completed = True
         for label, count, file, calc_h in tasks:
             if not self.mark_zone(label, count, file, calc_h):
                 print(f"\n❌ Разметка прервана на этапе: {label}")
+                completed = False
                 break
+
+        if completed:
+            self._save_metadata()
 
         print("\n" + "="*50)
         print(" РАЗМЕТКА ЗАВЕРШЕНА")
@@ -236,12 +253,27 @@ class PolygonMarker:
         self.cap.release()
         cv2.destroyAllWindows()
 
+    # Сохраняет фактический размер кадра, чтобы не применять гомографию к другому разрешению.
+    def _save_metadata(self):
+        metadata_path = self.output_dir / "geometry.json"
+        metadata = {
+            "frame_width": int(self.frame.shape[1]),
+            "frame_height": int(self.frame.shape[0]),
+            "virtual_field_width": 800,
+            "virtual_field_height": 600,
+        }
+        with metadata_path.open("w", encoding="utf-8") as metadata_file:
+            json.dump(metadata, metadata_file, ensure_ascii=False, indent=2)
+        print(f"✓ Размер кадра калибровки сохранён в {metadata_path}")
+
 class HomographyTransformer:
     """Класс для работы с сохраненными гомографическими матрицами"""
 
+    # Загружает ранее сохранённую гомографию для отдельных утилит и проверки координат.
     def __init__(self, homography_path="perimeter.npy"):
         self.H = self._load_homography(homography_path)
 
+    # Проверяет, что в файле действительно хранится матрица 3×3.
     def _load_homography(self, path):
         """Загрузка гомографической матрицы"""
         if os.path.exists(path):
@@ -252,6 +284,7 @@ class HomographyTransformer:
                 print(f"Файл {path} не содержит матрицу гомографии (формат {H.shape})")
         return None
 
+    # Преобразует одну точку кадра в виртуальные координаты поля.
     def transform_point(self, point):
         """Преобразование одной точки"""
         if self.H is None:
@@ -261,6 +294,7 @@ class HomographyTransformer:
         dst = cv2.perspectiveTransform(src, self.H)
         return dst[0][0]
 
+    # Преобразует список точек кадра в виртуальные координаты поля.
     def transform_points(self, points):
         """Преобразование массива точек"""
         if self.H is None:

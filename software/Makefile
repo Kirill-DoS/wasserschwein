@@ -1,6 +1,6 @@
 # Makefile для сборки проекта Raspberry Pi Pico
 PROJECT_NAME = arcanoid_main_file
-PICO_SDK_PATH = $(HOME)/pico/pico-sdk
+PICO_SDK_PATH ?= $(HOME)/pico/pico-sdk
 BUILD_DIR = build
 MOUNT_POINT = /run/media/arch/RPI-RP2
 all:
@@ -15,9 +15,8 @@ clean:
 	rm -rf $(BUILD_DIR)
 
 deploy:
-	mkdir -p $(MOUNT_POINT)
-	sudo mount /dev/sdb1 &(MOUNT_POINT) || true
-	mv $(BUILD_DIR)/$(PROJECT_NAME).uf2 $(MOUNT_POINT)
+	@test -f $(BUILD_DIR)/$(PROJECT_NAME).uf2 || (echo "Сначала выполните make all" && false)
+	cp $(BUILD_DIR)/$(PROJECT_NAME).uf2 $(MOUNT_POINT)/
 	sync
 
 help:

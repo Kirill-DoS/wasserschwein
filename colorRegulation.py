@@ -7,7 +7,9 @@ CamID = 1
 # Файл для сохранения настроек
 CONFIG_FILE = "textolite_hsv.npy"
 
-def nothing(x): pass
+# Ничего не делает: OpenCV требует функцию-обработчик при создании ползунка.
+def nothing(_value):
+    pass
 
 # Загрузка старых настроек, если есть
 if os.path.exists(CONFIG_FILE):

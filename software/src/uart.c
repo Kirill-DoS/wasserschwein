@@ -1,112 +1,152 @@
 #include "uart.h"
-#include "constants.h"
-#include "pico/stdlib.h"
-#include "hardware/uart.h"
-#include <stdio.h>
-#include "arcanoid.h"
 
-#include <string.h>
+#include <ctype.h>
 #include <stdlib.h>
-#include <stdio.h>
+#include <string.h>
 
-#define MAX_SIZE 10
+#include "arcanoid.h"
+#include "constants.h"
+#include "hardware/uart.h"
+#include "pico/stdlib.h"
 
-bool is_cmd_ready = 0;
+bool is_cmd_ready = false;
 int uart_idx = 0;
-char uart_buf[MAX_SIZE];
-char new_uart_buf[3];
-char buf[20];
+char uart_buf[MAX_SIZE] = {0};
+static bool command_overflow = false;
+static uint64_t last_valid_command_us = 0;
+static bool watchdog_has_stopped = false;
 
-void get_uart_buf(){
-    if (uart_is_readable(UART_ID)){
-        char c = uart_getc(UART_ID);
-        uart_buf[uart_idx] = c;
-        uart_idx++;
+// Запоминает время последней корректной команды для независимой защиты от потери связи.
+static void mark_valid_command(void) {
+    last_valid_command_us = time_us_64();
+    watchdog_has_stopped = false;
+}
 
-        if(uart_idx == MAX_SIZE){
-            uart_idx = 0;
+// Завершает команду ошибкой и переводит каретку в торможение.
+static void reject_command(const char *message) {
+    drive(0);
+    uart_puts(UART_ID, message);
+    clear_buf();
+}
+
+// Считывает доступные байты UART до полной команды, оканчивающейся переводом строки.
+void get_uart_buf(void) {
+    while (uart_is_readable(UART_ID) && !is_cmd_ready) {
+        char character = uart_getc(UART_ID);
+        if (character == '\r') {
+            continue;
         }
-
-        if(c == '\n'){
-            is_cmd_ready = 1;
-            uart_buf[uart_idx]  = '\0';
+        if (character == '\n') {
+            if (command_overflow || uart_idx == 0) {
+                reject_command("ERR command too long or empty\n");
+                command_overflow = false;
+                continue;
+            }
+            uart_buf[uart_idx] = '\0';
+            is_cmd_ready = true;
+            return;
         }
-
+        if (uart_idx >= MAX_SIZE - 1) {
+            command_overflow = true;
+            continue;
+        }
+        uart_buf[uart_idx++] = character;
     }
 }
 
-void print_uart_buf(){
-    uart_puts(UART_ID, "UART buffer\n");
+// Выводит принятую команду в UART для ручной диагностики.
+void print_uart_buf(void) {
+    uart_puts(UART_ID, "UART buffer: ");
     uart_puts(UART_ID, uart_buf);
-    printf("UART buffer\n", uart_buf);
+    uart_puts(UART_ID, "\n");
 }
 
-void make_buf(){
-    uart_buf[0] = 'M';
-    uart_buf[1]  = (uint8_t) (200 >> 8);
-    uart_buf[2] =( uint8_t) 200 ;
-};
-
-void parse_uart_buf(){
-
-    char cmd_char = uart_buf[0];
-    char value_str[10] = {0};
-
-    // Копируем числовую часть команды
-    strncpy(value_str, &uart_buf[1], strlen(uart_buf) - 2);
-    int value = atoi(value_str);
-
-    // Создаем new_uart_buf[3]
-    new_uart_buf[0] = cmd_char;  // Байт 1: код команды
-
-    if(cmd_char == 'F') {
-
-        // Преобразуем в uint16_t (с учетом знака)
-        //uint16_t unsigned_value = (uint16_t)(value + 255);  // Смещение для отрицательных значений
-
-        //new_uart_buf[1] = (unsigned_value >> 8) & 0xFF;  // Старший байт
-        //new_uart_buf[2] = unsigned_value & 0xFF;         // Младший байт
-
-        drive(value);
-
-        //uart_puts(UART_ID, new_uart_buf);
-        //printf("Motor command: %c, value: %d, bytes: 0x%02X 0x%02X\n",
-        //       cmd_char, value, new_uart_buf[1], new_uart_buf[2]);
-
-    } else if(cmd_char == 'B'){
-
-        drive(-1*value);
-
-    } else if(cmd_char == 'L') {
-
-       // new_uart_buf[1] = (value >> 8) & 0xFF;  // Старший байт
-        //new_uart_buf[2] = value & 0xFF;         // Младший байт
-
-        esc_set_speed(value, SERVO2);
-
-        //uart_puts(UART_ID, "Left servo");
-        //printf("%c servo command: %d, bytes: 0x%02X 0x%02X\n",
-        //      cmd_char, value, new_uart_buf[1], new_uart_buf[2]);
-
-    } else if(cmd_char == 'R'){
-       // new_uart_buf[1] = (value >> 8) & 0xFF;  // Старший байт
-        //new_uart_buf[2] = value & 0xFF;         // Младший байт
-
-        esc_set_speed(value, SERVO1);
-        //uart_puts(UART_ID, "Right servo\n");
-        //printf("%c servo command: %d, bytes: 0x%02X 0x%02X\n",
-        //       cmd_char, value, new_uart_buf[1], new_uart_buf[2]);
+// Преобразует числовую часть команды и убеждается, что после неё нет лишних символов.
+static bool parse_value(const char *text, int *value) {
+    char *end_ptr;
+    while (isspace((unsigned char)*text)) {
+        text++;
     }
-    // else if(cmd_char == 'A'){
-    //     // char adc_uart[20] = {"adc val: "};
-    //     // adc_uart += (char)battery_charge(BAT);
-    //     sprintf(buf, "%.2f", battery_charge(BAT));
-    //     uart_puts(UART_ID, "adc val: ");
-    //     uart_puts(UART_ID, buf);
+    if (*text == '\0') {
+        return false;
+    }
 
-    //     printf("ADC val: %d\n", battery_charge(BAT));
-    // }
-    else{
-        uart_puts(UART_ID, "error\n");
+    long parsed = strtol(text, &end_ptr, 10);
+    while (isspace((unsigned char)*end_ptr)) {
+        end_ptr++;
+    }
+    if (*end_ptr != '\0' || parsed < -2147483647L || parsed > 2147483647L) {
+        return false;
+    }
+    *value = (int)parsed;
+    return true;
+}
+
+// Проверяет и выполняет принятую текстовую команду F/B/L/R/S.
+void parse_uart_buf(void) {
+    char command = (char)toupper((unsigned char)uart_buf[0]);
+    int value = 0;
+
+    if (command == 'S' && uart_buf[1] == '\0') {
+        drive(0);
+        esc_set_speed(MIN_PULSE, SERVO1);
+        esc_set_speed(MIN_PULSE, SERVO2);
+        mark_valid_command();
+        uart_puts(UART_ID, "OK stop\n");
+        return;
+    }
+
+    if (!parse_value(&uart_buf[1], &value)) {
+        reject_command("ERR invalid value\n");
+        return;
+    }
+
+    switch (command) {
+        case 'F':
+            if (value < 0 || value > MAX_VEL) {
+                reject_command("ERR motor range 0..255\n");
+                return;
+            }
+            drive(value);
+            break;
+        case 'B':
+            if (value < 0 || value > MAX_VEL) {
+                reject_command("ERR motor range 0..255\n");
+                return;
+            }
+            drive(-value);
+            break;
+        case 'L':
+            if (value < MIN_PULSE || value > MAX_PULSE) {
+                reject_command("ERR ESC range 1000..2000\n");
+                return;
+            }
+            esc_set_speed((uint)value, SERVO2);
+            break;
+        case 'R':
+            if (value < MIN_PULSE || value > MAX_PULSE) {
+                reject_command("ERR ESC range 1000..2000\n");
+                return;
+            }
+            esc_set_speed((uint)value, SERVO1);
+            break;
+        default:
+            reject_command("ERR unknown command\n");
+            return;
+    }
+
+    mark_valid_command();
+    uart_puts(UART_ID, "OK\n");
+}
+
+// Останавливает каретку, если допустимая команда давно не приходила.
+void uart_safety_watchdog(void) {
+    if (last_valid_command_us == 0 || watchdog_has_stopped) {
+        return;
+    }
+    if (time_us_64() - last_valid_command_us > (uint64_t)COMMAND_TIMEOUT_MS * 1000u) {
+        drive(0);
+        watchdog_has_stopped = true;
+        uart_puts(UART_ID, "SAFE STOP: command timeout\n");
     }
 }

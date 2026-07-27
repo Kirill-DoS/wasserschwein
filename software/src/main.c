@@ -16,11 +16,16 @@ uint servo1_slice = 0;
 uint servo2_slice = 0;
 uint counter = 0;
 
+// Настраивает GPIO, PWM и UART микроконтроллера.
 void config(void);
+// Выполняет ручную калибровку ESC, если она явно включена в constants.h.
 void callibrate_esc(void);
+// Запускает ESC толкателя на заранее настроенных безопасных значениях.
 void esc_drive(void);
+// Останавливает оба ESC толкателя.
 void esc_stop(void);
 
+// Инициализирует контроллер и бесконечно обслуживает кнопку, UART и защитный watchdog.
 int main(void){
     //IS_DEBUG = true;
 
@@ -29,8 +34,12 @@ int main(void){
     sleep_ms(1000);
 
     printf("RP2040 running!\n");
+    esc_stop();
+#if CALIBRATE_ESC_ON_BOOT
     callibrate_esc();
-    //gpio_put(LED, 1);
+#else
+    printf("ESC calibration on boot is disabled\n");
+#endif
 
     //cleanup uart buffer
     while(uart_is_readable(uart0)){
@@ -56,11 +65,13 @@ int main(void){
             parse_uart_buf();
             clear_buf();
         }
+        uart_safety_watchdog();
     }
 
     return 0;
 }
 
+// Выполняет последовательность импульсов калибровки ESC только при явном включении флага.
 void callibrate_esc(void){
     gpio_put(LED, 1);
     // sleep_ms(500);
@@ -86,18 +97,21 @@ void callibrate_esc(void){
     printf("Callibration pass\n");
 }
 
+// Запускает оба ESC толкателя на предварительно проверенных импульсах.
 void esc_drive(void){
     gpio_put(LED, 1);
     esc_set_speed(ESC1_TARGET_PULSE, SERVO1);
     esc_set_speed(ESC2_TARGET_PULSE, SERVO2);
 }
 
+// Передаёт обоим ESC минимальный импульс, выключающий толкатель.
 void esc_stop(void){
     gpio_put(LED, 0);
     esc_set_speed(MIN_PULSE, SERVO1);
     esc_set_speed(MIN_PULSE, SERVO2);
 }
 
+// Настраивает выводы Pico для мотора, ESC, UART, светодиода и кнопки.
 void config(void){
     gpio_set_function(L, GPIO_FUNC_PWM);
     gpio_set_function(R, GPIO_FUNC_PWM);

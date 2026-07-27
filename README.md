@@ -1,26 +1,77 @@
-# wasserschwein
+# Wasserschwein — робот для физического «Арканоида»
 
-# 1 connect to Bluetooth
-    
-    connect to HC-06
-    sudo rfcomm connect 0 98:D3:11:FD:1C:0B 1
-    
-    for manual send
-    send data
-    picocom -b 9600 --echo /dev/rfcomm0
-    picocom -b 9600 --echo --omap crcrlf --emap crcrlf /dev/rfcomm0
+Робот движется по рейке у края игрового поля. Камера сверху видит мяч и цветную
+метку на роботе. Компьютер выбирает место встречи с мячом и передаёт скорость на
+Raspberry Pi Pico по Bluetooth.
 
-# 2 start program
+Подробное, понятное руководство с объяснением терминов находится в
+[PROJECT_GUIDE_RU.md](PROJECT_GUIDE_RU.md).
 
-    python3 main.py
-    
-    
-# command 
-    
-    F <value> motor drive forward, value range 0-255
-    B <value> motor drive back, value range 0-255
-    L <value> left BLCD, value range 
-    R <value> right BLCD, value range
+## Важно о безопасности
 
-    black ESC 1000 - 2000; 1000 - stop, 2000 max, 12 pin, R<cmd>
-    yellow ESC 1000
+- Первые проверки выполняйте с поднятыми колёсами или на безопасной малой мощности.
+- Держите физическую кнопку остановки и питание робота доступными оператору.
+- Прошивка сама тормозит каретку, если компьютер не присылает команды 400 мс.
+- При потере мяча или метки робота программа отправляет `S` — полную остановку.
+- Пока робот движется, компьютер повторяет текущую команду каждые 100 мс, поэтому
+  watchdog не мешает нормальной игре.
+
+## Быстрый запуск компьютерной части
+
+Нужны Python 3.10+ и Linux с подключённой USB-камерой и HC-06.
+
+```bash
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+sudo rfcomm connect 0 98:D3:11:FD:1C:0B 1
+python3 CV/main.py
+```
+
+При первом запуске откроется разметка поля. Затем настройте цвет мяча ползунками
+и нажмите Enter. Если изменилось разрешение камеры или её положение, выполните
+разметку заново.
+
+## Команды роботу
+
+Каждая команда обязательно заканчивается переводом строки:
+
+| Команда | Назначение |
+| --- | --- |
+| `F 0` … `F 255` | Каретка вперёд |
+| `B 0` … `B 255` | Каретка назад |
+| `L 1000` … `L 2000` | Левый ESC толкателя |
+| `R 1000` … `R 2000` | Правый ESC толкателя |
+| `S` | Остановить каретку и оба ESC |
+
+Для одной безопасной ручной команды:
+
+```bash
+python3 CV/BlueTooth.py S
+python3 CV/BlueTooth.py F 80
+```
+
+## Тесты
+
+```bash
+python3 -m unittest discover -s tests -v
+```
+
+## Сборка прошивки Pico
+
+Установите Raspberry Pi Pico SDK и укажите путь к нему:
+
+```bash
+export PICO_SDK_PATH=/путь/к/pico-sdk
+make -C software all
+```
+
+Готовый `software/build/arcanoid_main_file.uf2` скопируйте на Pico в режиме
+загрузчика. Автоматическая калибровка ESC при старте по умолчанию выключена;
+флаг находится в `software/src/constants.h`.
+
+## Дополнительные эксперименты
+
+YOLO не нужен для управления роботом. Если хотите обучать отдельный детектор
+мяча, установите `pip install -r requirements-ml.txt` и прочитайте команды в
+[PROJECT_GUIDE_RU.md](PROJECT_GUIDE_RU.md).

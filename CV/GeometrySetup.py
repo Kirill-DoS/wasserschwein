@@ -1,6 +1,7 @@
 import numpy as np
 import os
 
+# Создаёт тестовые файлы геометрии только для демонстрации без настоящей калибровки камеры.
 def check_or_create_files():
     files = {
         "homography.npy": np.eye(3), # Заглушка: единичная матрица

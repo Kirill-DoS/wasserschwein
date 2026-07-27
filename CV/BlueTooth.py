@@ -1,54 +1,41 @@
+import argparse
+
 import serial
-import time
 
-# ==================== НАСТРОЙКИ ====================
-port = "/dev/rfcomm0"      # Bluetooth-порт в Ubuntu
-baudrate = 9600            # Скорость (должна совпадать с роботом)
-command = "F"              # Команда: F-вперед, B-назад, L-влево, R-вправо, S-стоп
-speed = 100                # Скорость 0-255
-# ==================================================
 
-try:
-    # Открываем соединение
-    ser = serial.Serial(port, baudrate, timeout=1)
-    print(f"✓ Подключено к {port}")
-    print(f"✓ Скорость: {baudrate} бод")
-    print("Нажмите Ctrl+C для выхода\n")
+# Проверяет команду оператора и формирует строку, которую понимает прошивка Pico.
+def build_command(command, value=None):
+    command = command.upper()
+    if command == "S" and value is None:
+        return "S\n"
+    if command in {"F", "B"} and value is not None and 0 <= value <= 255:
+        return f"{command} {value}\n"
+    if command in {"L", "R"} and value is not None and 1000 <= value <= 2000:
+        return f"{command} {value}\n"
+    raise ValueError("Допустимы S, F/B 0..255 и L/R 1000..2000")
 
-    while True:
-        # Формируем строку команды (как в телефоне: "F100")
-        message = f"{command}{speed}"
-        
-        # Отправляем как строку (байты ASCII)
-        ser.write(message.encode())
-        
-        print(f"→ Отправлено: '{message}' (байты: {list(message.encode())})")
-        
-        # Ждем ответа от робота (если есть)
-        time.sleep(0.1)  # Небольшая задержка для ответа
-        
-        if ser.in_waiting > 0:
-            response = ser.read(ser.in_waiting).decode('utf-8', errors='ignore')
-            print(f"← Ответ робота: '{response}'")
-        
-        # Пауза между командами (чтобы не завалить робота)
-        time.sleep(1)
 
-except KeyboardInterrupt:
-    print("\n\n✗ Остановлено пользователем (Ctrl+C)")
-    
-except serial.SerialException as e:
-    print(f"\n✗ Ошибка порта: {e}")
-    print("Проверьте:")
-    print("  - Включен ли Bluetooth на роботе")
-    print("  - Правильный ли порт (проверьте: ls /dev/rfcomm*)")
-    print("  - Подключены ли вы: sudo rfcomm bind 0 XX:XX:XX:XX:XX:XX")
-    
-except Exception as e:
-    print(f"\n✗ Ошибка: {e}")
+# Открывает Bluetooth-порт, отправляет одну команду и печатает короткий ответ контроллера.
+def send_manual_command(port, baudrate, command, value):
+    message = build_command(command, value)
+    with serial.Serial(port, baudrate, timeout=1) as serial_port:
+        serial_port.write(message.encode("ascii"))
+        response = serial_port.readline().decode("utf-8", errors="replace").strip()
+    print(f"→ {message.strip()}")
+    if response:
+        print(f"← {response}")
 
-finally:
-    # Закрываем порт при любом выходе
-    if 'ser' in locals() and ser.is_open:
-        ser.close()
-        print("✓ Соединение закрыто")
+
+# Разбирает аргументы командной строки для безопасной ручной проверки связи с роботом.
+def main():
+    parser = argparse.ArgumentParser(description="Отправка одной команды роботу по Bluetooth")
+    parser.add_argument("command", choices=("F", "B", "L", "R", "S"))
+    parser.add_argument("value", nargs="?", type=int)
+    parser.add_argument("--port", default="/dev/rfcomm0")
+    parser.add_argument("--baudrate", default=9600, type=int)
+    args = parser.parse_args()
+    send_manual_command(args.port, args.baudrate, args.command, args.value)
+
+
+if __name__ == "__main__":
+    main()

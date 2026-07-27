@@ -2,20 +2,25 @@
 #define UART_H
 
 #include <stdio.h>
+#include <stdbool.h>
 #include "constants.h"
 
-#define MAX_SIZE 10
-#define NEW_BUF_SIZE 3
+#define MAX_SIZE 16
 
 extern bool is_cmd_ready;
 extern int uart_idx;
 extern char uart_buf[MAX_SIZE];
-extern char new_uart_buf[NEW_BUF_SIZE];
 
+// Считывает доступные байты UART до полной команды, оканчивающейся переводом строки.
 void get_uart_buf();
+// Выводит принятую команду в UART для ручной диагностики.
 void print_uart_buf();
+// Проверяет и выполняет принятую текстовую команду F/B/L/R/S.
 void parse_uart_buf();
-void make_new_buf();  // Изменено имя для ясности
+// Останавливает каретку, если допустимая команда давно не приходила.
+void uart_safety_watchdog();
+
+// Очищает буфер после обработки команды или ошибки протокола.
 static inline void clear_buf() {
     uart_idx = 0;
     for(int i = 0; i < MAX_SIZE; i++) {

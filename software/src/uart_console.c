@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include "pico/stdlib.h"
 
+// Запускает устаревшую консольную проверку Pico; в основную прошивку не входит.
 int main() {
     const int clk_sys = 125000000;
     // Инициализация USB serial

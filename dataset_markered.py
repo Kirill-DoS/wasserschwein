@@ -1,51 +1,53 @@
-from ultralytics import YOLO
+import argparse
+from pathlib import Path
+
 import cv2
-import os
+from ultralytics import YOLO
 
+
+# Создаёт черновую YOLO-разметку одного класса ball, которую обязательно нужно проверить вручную.
 def auto_label_with_yolo(images_folder, output_labels_folder):
-    """Использует YOLOv8 для авторазметки, потом можно поправить вручную"""
-    
-    # Загружаем модель
-    model = YOLO('yolov8n.pt')
-    
-    os.makedirs(output_labels_folder, exist_ok=True)
-    
-    # Проходим по всем изображениям
-    for img_file in os.listdir(images_folder):
-        if not img_file.endswith(('.jpg', '.jpeg', '.png')):
-            continue
-            
-        img_path = os.path.join(images_folder, img_file)
-        image = cv2.imread(img_path)
-        h, w = image.shape[:2]
-        
-        # Детекция объектов
-        results = model(img_path, conf=0.25, verbose=False)
-        
-        # Создаем файл разметки
-        label_file = os.path.join(output_labels_folder, 
-                                 os.path.splitext(img_file)[0] + '.txt')
-        
-        with open(label_file, 'w') as f:
-            if results[0].boxes is not None:
-                boxes = results[0].boxes.cpu().numpy()
-                
-                for i in range(len(boxes.cls)):
-                    # Проверяем, что это мяч (класс 32)
-                    if int(boxes.cls[i]) == 32:  # sports ball
-                        x1, y1, x2, y2 = boxes.xyxy[i]
-                        
-                        # Конвертируем в YOLO формат
-                        center_x = ((x1 + x2) / 2) / w
-                        center_y = ((y1 + y2) / 2) / h
-                        bbox_width = (x2 - x1) / w
-                        bbox_height = (y2 - y1) / h
-                        
-                        # Записываем
-                        f.write(f"0 {center_x:.6f} {center_y:.6f} {bbox_width:.6f} {bbox_height:.6f}\n")
-        
-        print(f"✅ Авторазметка: {img_file}")
+    model = YOLO("yolo11n.pt")
+    images_path = Path(images_folder)
+    labels_path = Path(output_labels_folder)
+    labels_path.mkdir(parents=True, exist_ok=True)
 
-# Запуск
-auto_label_with_yolo("fitness_ball_dataset/images/train", 
-                     "fitness_ball_dataset/labels/train")
+    for image_path in images_path.iterdir():
+        if image_path.suffix.lower() not in {".jpg", ".jpeg", ".png"}:
+            continue
+        image = cv2.imread(str(image_path))
+        if image is None:
+            print(f"⚠️ Не удалось прочитать {image_path.name}")
+            continue
+        height, width = image.shape[:2]
+        results = model(str(image_path), conf=0.25, verbose=False)
+        label_path = labels_path / f"{image_path.stem}.txt"
+
+        with label_path.open("w", encoding="utf-8") as label_file:
+            boxes = results[0].boxes
+            if boxes is None:
+                continue
+            classes = boxes.cls.cpu().numpy()
+            coordinates = boxes.xyxy.cpu().numpy()
+            for class_id, (x1, y1, x2, y2) in zip(classes, coordinates):
+                if int(class_id) != 32:
+                    continue
+                center_x = ((x1 + x2) / 2) / width
+                center_y = ((y1 + y2) / 2) / height
+                box_width = (x2 - x1) / width
+                box_height = (y2 - y1) / height
+                label_file.write(f"0 {center_x:.6f} {center_y:.6f} {box_width:.6f} {box_height:.6f}\n")
+        print(f"✅ Черновая разметка: {image_path.name}")
+
+
+# Разбирает пути для запуска авторазметки без выполнения работы при простом импорте файла.
+def main():
+    parser = argparse.ArgumentParser(description="Черновая авторазметка мяча через YOLO")
+    parser.add_argument("images_folder")
+    parser.add_argument("output_labels_folder")
+    args = parser.parse_args()
+    auto_label_with_yolo(args.images_folder, args.output_labels_folder)
+
+
+if __name__ == "__main__":
+    main()
