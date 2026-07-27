@@ -1,6 +1,6 @@
 import unittest
 
-from CV.RobotController import RobotController
+from vision.robot_controller import RobotController
 
 
 class RobotControllerTest(unittest.TestCase):

@@ -12,4 +12,4 @@ RUN pip3 install --no-cache-dir -r requirements-ml.txt
 COPY . .
 
 # Контейнер предназначен для проверки GPU и экспериментов YOLO, а не для доступа к камере/HC-06.
-CMD ["python3", "check_gpu.py"]
+CMD ["python3", "tools/check_gpu.py"]

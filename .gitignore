@@ -1,9 +1,11 @@
 /build
-/software/build
-/3D_models/**/*.FCBak
-/CV/geometry.json
+/firmware/build
+/hardware/cad/**/*.FCBak
+/vision/calibration/geometry.json
+.env
 __pycache__/
 *.py[cod]
+.pytest_cache/
 .venv/
 venv/
 .DS_Store
