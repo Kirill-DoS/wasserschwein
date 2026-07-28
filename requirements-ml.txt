@@ -1,0 +1,6 @@
+# Необязательные зависимости для экспериментов с YOLO, не нужны для управления роботом.
+-r requirements.txt
+ultralytics>=8.3
+torch>=2.1
+torchvision>=0.16
+PyYAML>=6.0
