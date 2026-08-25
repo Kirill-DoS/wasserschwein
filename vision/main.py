@@ -107,7 +107,9 @@ def main():
         config=config,
         frame_size=(camera_params["width"], camera_params["height"]),
     )
-    color_lower, color_upper = calibrator.calibrate()
+    # calibrator.create_sliders_if_needed()
+    # color_lower, color_upper = calibrator.calibrate()
+    color_lower, color_upper = config.get_ball_color_bounds()
 
     safety_params = config.get_safety_params()
     physics_params = config.get_physics_params()
